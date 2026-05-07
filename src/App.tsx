@@ -500,7 +500,7 @@ export default function App() {
     iniciar();
 
     const { data: listener } = supabase.auth.onAuthStateChange(
-      async (_event: string, session: any) => {
+      async (_event: any, session: any) => {
         const email = session?.user?.email;
 
         if (!email) {
