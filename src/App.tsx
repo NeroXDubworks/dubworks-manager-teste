@@ -524,7 +524,10 @@ export default function App() {
         }
 
         const perfil = await buscarPerfilPorEmail(email);
-        if (perfil) setUsuarioLogado(perfil);
+
+        if (perfil) {
+          setUsuarioLogado(perfil);
+        }
       }
     );
 
