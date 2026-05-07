@@ -517,10 +517,12 @@ export default function App() {
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (_event: string, session: any) => {
         const email = session?.user?.email;
+
         if (!email) {
           setUsuarioLogado(null);
           return;
         }
+
         const perfil = await buscarPerfilPorEmail(email);
         if (perfil) setUsuarioLogado(perfil);
       }
