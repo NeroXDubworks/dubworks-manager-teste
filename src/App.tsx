@@ -293,16 +293,26 @@ async function carregarUsuariosBanco(): Promise<Usuario[]> {
 }
 
 async function buscarPerfilPorEmail(email: string): Promise<Usuario | null> {
-  const { data, error } = await supabase
-    .from("usuarios")
-    .select("*")
-    .eq("login", email)
-    .single();
+  const emailNormalizado = normalizar(email);
+
+  if (!emailNormalizado) return null;
+
+  const { data, error } = await comTimeout(
+    supabase
+      .from("usuarios")
+      .select("*")
+      .eq("login", emailNormalizado)
+      .maybeSingle(),
+    15000,
+    "A busca do perfil demorou demais."
+  );
 
   if (error) {
     console.error("Perfil não encontrado:", error);
     return null;
   }
+
+  if (!data) return null;
 
   return mapUsuarioDb(data);
 }
@@ -471,6 +481,19 @@ function gerarIdTemporario() {
   return `${Date.now()}_${Math.floor(Math.random() * 100000)}`;
 }
 
+function comTimeout<T>(
+  promessa: PromiseLike<T>,
+  ms = 15000,
+  mensagem = "Tempo limite excedido"
+): Promise<T> {
+  return Promise.race([
+    Promise.resolve(promessa),
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(mensagem)), ms)
+    ),
+  ]);
+}
+
 export default function App() {
   const [projetos, setProjetos] = useState<Projeto[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -503,15 +526,32 @@ export default function App() {
     useState<ElencoItem>(elencoVazio);
 
   async function recarregarProjetos() {
-    setCarregando(true);
-    const lista = await carregarProjetosBanco(mostrarArquivados);
-    setProjetos(lista);
-    setCarregando(false);
+    try {
+      setCarregando(true);
+      const lista = await comTimeout(
+        carregarProjetosBanco(mostrarArquivados),
+        20000,
+        "A busca dos projetos demorou demais."
+      );
+      setProjetos(lista);
+    } catch (err) {
+      console.error("Erro ao recarregar projetos:", err);
+    } finally {
+      setCarregando(false);
+    }
   }
 
   async function recarregarUsuarios() {
-    const lista = await carregarUsuariosBanco();
-    setUsuarios(lista);
+    try {
+      const lista = await comTimeout(
+        carregarUsuariosBanco(),
+        20000,
+        "A busca dos usuários demorou demais."
+      );
+      setUsuarios(lista);
+    } catch (err) {
+      console.error("Erro ao recarregar usuários:", err);
+    }
   }
 
   useEffect(() => {
@@ -711,24 +751,34 @@ export default function App() {
 
   async function fazerLogin(e: React.FormEvent) {
     e.preventDefault();
-    setCarregandoLogin(true);
-    setErroLogin("");
 
     try {
+      setCarregandoLogin(true);
+      setErroLogin("");
+
       const email = login.trim().toLowerCase();
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password: senha,
-      });
+
+      if (!email || !senha) {
+        setErroLogin("Digite seu e-mail e sua senha.");
+        return;
+      }
+
+      const { data, error } = await comTimeout(
+        supabase.auth.signInWithPassword({
+          email,
+          password: senha,
+        }),
+        20000,
+        "O login demorou demais para responder."
+      );
 
       if (error || !data.user?.email) {
+        console.error("Erro no login:", error);
         setErroLogin("Login ou senha inválidos.");
         return;
       }
 
-      const perfil = await buscarPerfilPorEmail(
-        data.user.email.trim().toLowerCase()
-      );
+      const perfil = await buscarPerfilPorEmail(data.user.email);
 
       if (!perfil) {
         await supabase.auth.signOut();
@@ -741,8 +791,18 @@ export default function App() {
       setUsuarioLogado(perfil);
       setErroLogin("");
       setSelecionadoId(null);
-      await recarregarProjetos();
-      await recarregarUsuarios();
+
+      // Recarrega os dados depois de liberar a entrada.
+      // Assim o botão não fica preso em "Entrando..." se alguma consulta demorar.
+      setTimeout(() => {
+        recarregarProjetos();
+        recarregarUsuarios();
+      }, 0);
+    } catch (err: any) {
+      console.error("Erro inesperado no login:", err);
+      setErroLogin(
+        err?.message || "Erro de conexão com o servidor. Tente novamente."
+      );
     } finally {
       setCarregandoLogin(false);
     }
