@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "./lib/supabase";
 
@@ -55,6 +54,8 @@ type Projeto = {
   Video_Editor_Link: string;
   Registro_Semanal: string;
   Observacoes: string;
+  Capa_URL: string;
+  Arquivado: boolean;
   Elenco: ElencoItem[];
 };
 
@@ -74,6 +75,8 @@ const projetoVazio: Projeto = {
   Video_Editor_Link: "",
   Registro_Semanal: "",
   Observacoes: "",
+  Capa_URL: "",
+  Arquivado: false,
   Elenco: [],
 };
 
@@ -269,6 +272,8 @@ function mapProjetoDb(item: any, elenco: ElencoItem[]): Projeto {
     Video_Editor_Link: item.video_editor_link || "",
     Registro_Semanal: item.registro_semanal || "",
     Observacoes: item.observacoes || "",
+    Capa_URL: item.capa_url || "",
+    Arquivado: Boolean(item.arquivado),
     Elenco: elenco,
   };
 }
@@ -302,10 +307,13 @@ async function buscarPerfilPorEmail(email: string): Promise<Usuario | null> {
   return mapUsuarioDb(data);
 }
 
-async function carregarProjetosBanco(): Promise<Projeto[]> {
+async function carregarProjetosBanco(
+  mostrarArquivados = false
+): Promise<Projeto[]> {
   const { data: projetosDb, error: erroProjetos } = await supabase
     .from("projetos")
     .select("*")
+    .eq("arquivado", mostrarArquivados)
     .order("id", { ascending: false });
 
   if (erroProjetos) {
@@ -363,6 +371,8 @@ async function criarProjetoBanco(projeto: Projeto): Promise<string | null> {
         video_editor_link: projeto.Video_Editor_Link,
         registro_semanal: projeto.Registro_Semanal,
         observacoes: projeto.Observacoes,
+        capa_url: projeto.Capa_URL,
+        arquivado: projeto.Arquivado || false,
       },
     ])
     .select("id")
@@ -394,11 +404,30 @@ async function atualizarProjetoBanco(projeto: Projeto): Promise<boolean> {
       video_editor_link: projeto.Video_Editor_Link,
       registro_semanal: projeto.Registro_Semanal,
       observacoes: projeto.Observacoes,
+      capa_url: projeto.Capa_URL,
+      arquivado: projeto.Arquivado || false,
     })
     .eq("id", Number(projeto.ID));
 
   if (error) {
     console.error("Erro ao atualizar projeto:", error);
+    return false;
+  }
+
+  return true;
+}
+
+async function atualizarArquivamentoProjetoBanco(
+  projetoId: string,
+  arquivado: boolean
+): Promise<boolean> {
+  const { error } = await supabase
+    .from("projetos")
+    .update({ arquivado })
+    .eq("id", Number(projetoId));
+
+  if (error) {
+    console.error("Erro ao alterar arquivamento:", error);
     return false;
   }
 
@@ -455,14 +484,9 @@ export default function App() {
   const [rascunho, setRascunho] = useState<Projeto | null>(null);
   const [mostrarNovoProjeto, setMostrarNovoProjeto] = useState(false);
   const [mostrarUsuarios, setMostrarUsuarios] = useState(false);
+  const [mostrarArquivados, setMostrarArquivados] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [carregandoLogin, setCarregandoLogin] = useState(false);
-  const [larguraTela, setLarguraTela] = useState(
-    typeof window === "undefined" ? 1200 : window.innerWidth
-  );
-
-  const isMobile = larguraTela <= 768;
-  const isTablet = larguraTela <= 1100;
 
   const [novoProjeto, setNovoProjeto] = useState<Projeto>(projetoVazio);
   const [novoUsuario, setNovoUsuario] = useState<Usuario>({
@@ -478,19 +502,9 @@ export default function App() {
   const [novoElencoRascunho, setNovoElencoRascunho] =
     useState<ElencoItem>(elencoVazio);
 
-  useEffect(() => {
-    function atualizarLargura() {
-      setLarguraTela(window.innerWidth);
-    }
-
-    atualizarLargura();
-    window.addEventListener("resize", atualizarLargura);
-    return () => window.removeEventListener("resize", atualizarLargura);
-  }, []);
-
   async function recarregarProjetos() {
     setCarregando(true);
-    const lista = await carregarProjetosBanco();
+    const lista = await carregarProjetosBanco(mostrarArquivados);
     setProjetos(lista);
     setCarregando(false);
   }
@@ -501,39 +515,51 @@ export default function App() {
   }
 
   useEffect(() => {
-    async function iniciar() {
+    async function restaurarSessaoERecarregar() {
+      const { data } = await supabase.auth.getSession();
+      const email = data.session?.user?.email?.trim().toLowerCase();
+
       await recarregarProjetos();
       await recarregarUsuarios();
 
-      const { data } = await supabase.auth.getSession();
-      const email = data.session?.user?.email;
-      if (email) {
-        const perfil = await buscarPerfilPorEmail(email);
-        if (perfil) setUsuarioLogado(perfil);
+      if (!email) {
+        setUsuarioLogado(null);
+        return;
+      }
+
+      const perfil = await buscarPerfilPorEmail(email);
+      if (perfil) setUsuarioLogado(perfil);
+    }
+
+    async function aoVoltarParaTela() {
+      if (document.visibilityState === "visible") {
+        await restaurarSessaoERecarregar();
       }
     }
 
-    iniciar();
+    restaurarSessaoERecarregar();
 
     const { data: listener } = supabase.auth.onAuthStateChange(
-      async (_event: any, session: any) => {
-        const email = session?.user?.email;
-
+      async (_event, session) => {
+        const email = session?.user?.email?.trim().toLowerCase();
         if (!email) {
           setUsuarioLogado(null);
           return;
         }
-
         const perfil = await buscarPerfilPorEmail(email);
-
-        if (perfil) {
-          setUsuarioLogado(perfil);
-        }
+        if (perfil) setUsuarioLogado(perfil);
       }
     );
 
-    return () => listener.subscription.unsubscribe();
-  }, []);
+    document.addEventListener("visibilitychange", aoVoltarParaTela);
+    window.addEventListener("focus", aoVoltarParaTela);
+
+    return () => {
+      listener.subscription.unsubscribe();
+      document.removeEventListener("visibilitychange", aoVoltarParaTela);
+      window.removeEventListener("focus", aoVoltarParaTela);
+    };
+  }, [mostrarArquivados]);
 
   useEffect(() => {
     if (!mostrarNovoProjeto || !usuarioLogado) return;
@@ -688,33 +714,38 @@ export default function App() {
     setCarregandoLogin(true);
     setErroLogin("");
 
-    const email = login.trim().toLowerCase();
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password: senha,
-    });
+    try {
+      const email = login.trim().toLowerCase();
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password: senha,
+      });
 
-    if (error || !data.user?.email) {
-      setErroLogin("Login ou senha inválidos.");
-      setCarregandoLogin(false);
-      return;
-    }
+      if (error || !data.user?.email) {
+        setErroLogin("Login ou senha inválidos.");
+        return;
+      }
 
-    const perfil = await buscarPerfilPorEmail(data.user.email);
-
-    if (!perfil) {
-      await supabase.auth.signOut();
-      setErroLogin(
-        "Login autorizado, mas esse e-mail ainda não tem perfil na tabela usuarios. Confira o cadastro no Supabase."
+      const perfil = await buscarPerfilPorEmail(
+        data.user.email.trim().toLowerCase()
       );
-      setCarregandoLogin(false);
-      return;
-    }
 
-    setUsuarioLogado(perfil);
-    setErroLogin("");
-    setSelecionadoId(null);
-    setCarregandoLogin(false);
+      if (!perfil) {
+        await supabase.auth.signOut();
+        setErroLogin(
+          "Login autorizado, mas esse e-mail ainda não tem perfil na tabela usuarios. Confira o cadastro no Supabase."
+        );
+        return;
+      }
+
+      setUsuarioLogado(perfil);
+      setErroLogin("");
+      setSelecionadoId(null);
+      await recarregarProjetos();
+      await recarregarUsuarios();
+    } finally {
+      setCarregandoLogin(false);
+    }
   }
 
   async function enviarRecuperacaoSenha() {
@@ -986,6 +1017,29 @@ export default function App() {
     alert("Treinamento concluído e usuário alterado para líder.");
   }
 
+  async function alterarArquivamentoProjeto(arquivado: boolean) {
+    if (!usuarioLogado || usuarioLogado.cargo !== "diretoria" || !selecionado)
+      return;
+
+    const acao = arquivado ? "arquivar" : "reativar";
+    const confirmar = confirm(`Tem certeza que deseja ${acao} este projeto?`);
+    if (!confirmar) return;
+
+    const ok = await atualizarArquivamentoProjetoBanco(
+      selecionado.ID,
+      arquivado
+    );
+    if (!ok) {
+      alert("Não consegui alterar o status de arquivamento do projeto.");
+      return;
+    }
+
+    setSelecionadoId(null);
+    setRascunho(null);
+    await recarregarProjetos();
+    alert(arquivado ? "Projeto arquivado." : "Projeto reativado.");
+  }
+
   function adicionarElencoNovoProjeto() {
     if (
       !novoElencoProjeto.personagem.trim() ||
@@ -1059,6 +1113,8 @@ export default function App() {
       "Video_Editor_Link",
       "Registro_Semanal",
       "Observacoes",
+      "Capa_URL",
+      "Arquivado",
       "Qtd_Elenco",
     ];
 
@@ -1079,6 +1135,8 @@ export default function App() {
         p.Video_Editor_Link,
         p.Registro_Semanal,
         p.Observacoes,
+        p.Capa_URL,
+        p.Arquivado ? "Sim" : "Não",
         String(p.Elenco.length),
       ]
         .map(escaparCSV)
@@ -1154,16 +1212,15 @@ export default function App() {
             "linear-gradient(180deg, #0f3c8d 0%, #1456d9 45%, #f4f8fd 45%, #f4f8fd 100%)",
           display: "flex",
           justifyContent: "center",
-          alignItems: isMobile ? "flex-start" : "center",
-          padding: isMobile ? 14 : 24,
-          paddingTop: isMobile ? 26 : 24,
+          alignItems: "center",
+          padding: 24,
           fontFamily: "Arial, sans-serif",
         }}
       >
         <div
           style={{
             width: "100%",
-            maxWidth: isMobile ? "100%" : 520,
+            maxWidth: 520,
             background: "#fff",
             borderRadius: 28,
             boxShadow: "0 30px 80px rgba(6, 31, 75, 0.22)",
@@ -1174,7 +1231,7 @@ export default function App() {
           <div
             style={{
               background: "linear-gradient(135deg, #0d47a1, #1366d9)",
-              padding: isMobile ? 22 : 28,
+              padding: 28,
               color: "#fff",
             }}
           >
@@ -1188,15 +1245,13 @@ export default function App() {
                 marginBottom: 14,
               }}
             />
-            <h1 style={{ margin: 0, fontSize: isMobile ? 28 : 34 }}>
-              DubWorks Manager
-            </h1>
+            <h1 style={{ margin: 0, fontSize: 34 }}>DubWorks Manager</h1>
             <p style={{ marginTop: 8, opacity: 0.9, fontSize: 15 }}>
               Acesso interno de gerenciamento
             </p>
           </div>
 
-          <form onSubmit={fazerLogin} style={{ padding: isMobile ? 20 : 28 }}>
+          <form onSubmit={fazerLogin} style={{ padding: 28 }}>
             <label style={labelStyle}>E-mail</label>
             <input
               value={login}
@@ -1272,11 +1327,10 @@ export default function App() {
         style={{
           background: estilos.branco,
           borderBottom: `1px solid ${estilos.borda}`,
-          padding: isMobile ? "12px 14px" : "14px 24px",
+          padding: "14px 24px",
           display: "flex",
-          flexDirection: isMobile ? "column" : "row",
           justifyContent: "space-between",
-          alignItems: isMobile ? "stretch" : "center",
+          alignItems: "center",
           gap: 20,
           flexWrap: "wrap",
           position: "sticky",
@@ -1284,26 +1338,16 @@ export default function App() {
           zIndex: 20,
         }}
       >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: isMobile ? 12 : 18,
-          }}
-        >
+        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
           <img
             src={LOGO_URL}
             alt="DubWorks"
-            style={{
-              width: isMobile ? 92 : 120,
-              height: "auto",
-              objectFit: "contain",
-            }}
+            style={{ width: 120, height: "auto", objectFit: "contain" }}
           />
           <div>
             <div
               style={{
-                fontSize: isMobile ? 22 : 28,
+                fontSize: 28,
                 fontWeight: 800,
                 color: estilos.azulEscuro,
               }}
@@ -1319,7 +1363,7 @@ export default function App() {
         <div
           style={{
             display: "flex",
-            alignItems: isMobile ? "stretch" : "center",
+            alignItems: "center",
             gap: 12,
             flexWrap: "wrap",
           }}
@@ -1357,9 +1401,7 @@ export default function App() {
             Sair
           </button>
 
-          <div
-            style={{ textAlign: isMobile ? "left" : "right", minWidth: 120 }}
-          >
+          <div style={{ textAlign: "right", minWidth: 120 }}>
             <div style={{ fontWeight: 700 }}>{usuarioLogado.nome}</div>
             <div style={{ color: estilos.textoSuave, fontSize: 14 }}>
               {cargoLabel(usuarioLogado.cargo)}
@@ -1368,13 +1410,11 @@ export default function App() {
         </div>
       </header>
 
-      <main style={{ padding: isMobile ? 12 : 24 }}>
+      <main style={{ padding: 24 }}>
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: isMobile
-              ? "repeat(2, minmax(0, 1fr))"
-              : "repeat(auto-fit, minmax(220px, 1fr))",
+            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
             gap: 16,
             marginBottom: 18,
           }}
@@ -1402,11 +1442,7 @@ export default function App() {
             ...cardStyle,
             marginBottom: 18,
             display: "grid",
-            gridTemplateColumns: isMobile
-              ? "1fr"
-              : isTablet
-              ? "1fr 1fr"
-              : "1.4fr 220px 170px 170px",
+            gridTemplateColumns: "1.4fr 220px 170px 170px 170px",
             gap: 12,
             alignItems: "center",
           }}
@@ -1430,6 +1466,18 @@ export default function App() {
           </select>
 
           <button
+            onClick={() => {
+              const novoValor = !mostrarArquivados;
+              setMostrarArquivados(novoValor);
+              setSelecionadoId(null);
+              setRascunho(null);
+            }}
+            style={botaoSecundarioGrandeStyle}
+          >
+            {mostrarArquivados ? "Ver ativos" : "Arquivados"}
+          </button>
+
+          <button
             onClick={exportarProjetosCSV}
             style={botaoSecundarioGrandeStyle}
           >
@@ -1447,7 +1495,7 @@ export default function App() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: isTablet ? "1fr" : "1.45fr 1fr",
+            gridTemplateColumns: "1.45fr 1fr",
             gap: 20,
             alignItems: "start",
           }}
@@ -1463,7 +1511,8 @@ export default function App() {
                 fontSize: 20,
               }}
             >
-              Projetos {carregando ? "• carregando..." : ""}
+              {mostrarArquivados ? "Projetos arquivados" : "Projetos ativos"}{" "}
+              {carregando ? "• carregando..." : ""}
             </div>
 
             <div style={{ overflowX: "auto" }}>
@@ -1546,6 +1595,43 @@ export default function App() {
                 </div>
               ) : (
                 <>
+                  {rascunho.Capa_URL ? (
+                    <img
+                      src={rascunho.Capa_URL}
+                      alt={`Capa do projeto ${rascunho.Projeto}`}
+                      style={{
+                        width: "100%",
+                        height: 190,
+                        objectFit: "cover",
+                        borderRadius: 18,
+                        border: `1px solid ${estilos.borda}`,
+                        marginBottom: 16,
+                        background: "#eef5ff",
+                      }}
+                    />
+                  ) : (
+                    <div
+                      style={{
+                        width: "100%",
+                        height: 150,
+                        borderRadius: 18,
+                        border: `1px solid ${estilos.borda}`,
+                        marginBottom: 16,
+                        background: "linear-gradient(135deg, #0d47a1, #1366d9)",
+                        color: "#fff",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontWeight: 800,
+                        fontSize: 22,
+                        textAlign: "center",
+                        padding: 18,
+                      }}
+                    >
+                      {rascunho.Projeto || "DubWorks"}
+                    </div>
+                  )}
+
                   <div
                     style={{
                       paddingBottom: 14,
@@ -1578,7 +1664,7 @@ export default function App() {
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                      gridTemplateColumns: "1fr 1fr",
                       gap: 12,
                     }}
                   >
@@ -1652,6 +1738,16 @@ export default function App() {
                       onChange={(v) => atualizarCampo("Data_Inicio", v)}
                       disabled={!podeEditarProjeto(usuarioLogado, selecionado)}
                     />
+                    <div style={{ gridColumn: "1 / -1" }}>
+                      <Campo
+                        label="Link da capa do projeto"
+                        value={rascunho.Capa_URL}
+                        onChange={(v) => atualizarCampo("Capa_URL", v)}
+                        disabled={
+                          !podeEditarProjeto(usuarioLogado, selecionado)
+                        }
+                      />
+                    </div>
                   </div>
 
                   <div style={{ marginTop: 14 }}>
@@ -1738,6 +1834,24 @@ export default function App() {
                   >
                     Salvar alterações
                   </button>
+
+                  {usuarioLogado.cargo === "diretoria" && (
+                    <button
+                      onClick={() =>
+                        alterarArquivamentoProjeto(!mostrarArquivados)
+                      }
+                      style={{
+                        ...botaoSecundarioGrandeStyle,
+                        marginTop: 10,
+                        width: "100%",
+                        color: mostrarArquivados ? "#087443" : "#c2410c",
+                      }}
+                    >
+                      {mostrarArquivados
+                        ? "Reativar projeto"
+                        : "Arquivar projeto"}
+                    </button>
+                  )}
                 </>
               )}
             </div>
@@ -1755,9 +1869,7 @@ export default function App() {
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: isMobile
-                          ? "1fr"
-                          : "1fr 1fr 1fr auto",
+                        gridTemplateColumns: "1fr 1fr 1fr auto",
                         gap: 10,
                         marginBottom: 14,
                       }}
@@ -1928,11 +2040,7 @@ export default function App() {
           onClose={() => setMostrarNovoProjeto(false)}
         >
           <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-              gap: 12,
-            }}
+            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}
           >
             <Campo
               label="Projeto"
@@ -2001,6 +2109,15 @@ export default function App() {
                 setNovoProjeto({ ...novoProjeto, Data_Inicio: v })
               }
             />
+            <div style={{ gridColumn: "1 / -1" }}>
+              <Campo
+                label="Link da capa do projeto"
+                value={novoProjeto.Capa_URL}
+                onChange={(v) =>
+                  setNovoProjeto({ ...novoProjeto, Capa_URL: v })
+                }
+              />
+            </div>
           </div>
 
           <div style={{ marginTop: 16 }}>
@@ -2020,7 +2137,7 @@ export default function App() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr auto",
+                gridTemplateColumns: "1fr 1fr 1fr auto",
                 gap: 10,
                 marginBottom: 12,
               }}
@@ -2135,7 +2252,7 @@ export default function App() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+                gridTemplateColumns: "1fr 1fr",
                 gap: 12,
               }}
             >
