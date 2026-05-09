@@ -132,24 +132,44 @@ function statusPadraoPorCargo(cargo: Cargo): TrainingStatus {
 
 function podeVerProjeto(usuario: Usuario | null, projeto: Projeto) {
   if (!usuario) return false;
-  if (["diretoria", "adm", "adm_treinamento"].indexOf(usuario.cargo) !== -1)
+
+  const cargo = normalizar(usuario.cargo);
+  const vinculo = normalizar(usuario.vinculo);
+  const login = normalizar(usuario.login);
+  const nome = normalizar(usuario.nome);
+  const lider = normalizar(projeto.Lider);
+  const editor = normalizar(projeto.Editor);
+
+  if (["diretoria", "adm", "adm_treinamento"].indexOf(cargo) !== -1) {
     return true;
-  if (usuario.cargo === "lider" || usuario.cargo === "lider_treinamento") {
-    return normalizar(projeto.Lider) === normalizar(usuario.vinculo);
   }
-  if (usuario.cargo === "editor") {
-    return normalizar(projeto.Editor) === normalizar(usuario.vinculo);
+
+  if (cargo === "lider" || cargo === "lider_treinamento") {
+    return lider === vinculo || lider === login || lider === nome;
   }
+
+  if (cargo === "editor") {
+    return editor === vinculo || editor === login || editor === nome;
+  }
+
   return false;
 }
 
 function podeEditarProjeto(usuario: Usuario | null, projeto: Projeto | null) {
   if (!usuario || !projeto) return false;
-  if (usuario.cargo === "diretoria") return true;
-  if (usuario.cargo === "adm") return true;
-  if (usuario.cargo === "lider" || usuario.cargo === "lider_treinamento") {
-    return normalizar(projeto.Lider) === normalizar(usuario.vinculo);
+
+  const cargo = normalizar(usuario.cargo);
+  const vinculo = normalizar(usuario.vinculo);
+  const login = normalizar(usuario.login);
+  const nome = normalizar(usuario.nome);
+  const lider = normalizar(projeto.Lider);
+
+  if (cargo === "diretoria" || cargo === "adm") return true;
+
+  if (cargo === "lider" || cargo === "lider_treinamento") {
+    return lider === vinculo || lider === login || lider === nome;
   }
+
   return false;
 }
 
@@ -510,6 +530,12 @@ export default function App() {
   const [mostrarArquivados, setMostrarArquivados] = useState(false);
   const [carregando, setCarregando] = useState(true);
   const [carregandoLogin, setCarregandoLogin] = useState(false);
+  const [larguraTela, setLarguraTela] = useState(
+    typeof window === "undefined" ? 1200 : window.innerWidth
+  );
+
+  const isMobile = larguraTela <= 768;
+  const isTablet = larguraTela <= 1100;
 
   const [novoProjeto, setNovoProjeto] = useState<Projeto>(projetoVazio);
   const [novoUsuario, setNovoUsuario] = useState<Usuario>({
@@ -524,6 +550,16 @@ export default function App() {
     useState<ElencoItem>(elencoVazio);
   const [novoElencoRascunho, setNovoElencoRascunho] =
     useState<ElencoItem>(elencoVazio);
+
+  useEffect(() => {
+    function atualizarLargura() {
+      setLarguraTela(window.innerWidth);
+    }
+
+    atualizarLargura();
+    window.addEventListener("resize", atualizarLargura);
+    return () => window.removeEventListener("resize", atualizarLargura);
+  }, []);
 
   async function recarregarProjetos() {
     try {
@@ -1272,15 +1308,16 @@ export default function App() {
             "linear-gradient(180deg, #0f3c8d 0%, #1456d9 45%, #f4f8fd 45%, #f4f8fd 100%)",
           display: "flex",
           justifyContent: "center",
-          alignItems: "center",
-          padding: 24,
+          alignItems: isMobile ? "flex-start" : "center",
+          padding: isMobile ? 14 : 24,
+          paddingTop: isMobile ? 26 : 24,
           fontFamily: "Arial, sans-serif",
         }}
       >
         <div
           style={{
             width: "100%",
-            maxWidth: 520,
+            maxWidth: isMobile ? "100%" : 520,
             background: "#fff",
             borderRadius: 28,
             boxShadow: "0 30px 80px rgba(6, 31, 75, 0.22)",
@@ -1291,7 +1328,7 @@ export default function App() {
           <div
             style={{
               background: "linear-gradient(135deg, #0d47a1, #1366d9)",
-              padding: 28,
+              padding: isMobile ? 22 : 28,
               color: "#fff",
             }}
           >
@@ -1305,13 +1342,15 @@ export default function App() {
                 marginBottom: 14,
               }}
             />
-            <h1 style={{ margin: 0, fontSize: 34 }}>DubWorks Manager</h1>
+            <h1 style={{ margin: 0, fontSize: isMobile ? 28 : 34 }}>
+              DubWorks Manager
+            </h1>
             <p style={{ marginTop: 8, opacity: 0.9, fontSize: 15 }}>
               Acesso interno de gerenciamento
             </p>
           </div>
 
-          <form onSubmit={fazerLogin} style={{ padding: 28 }}>
+          <form onSubmit={fazerLogin} style={{ padding: isMobile ? 20 : 28 }}>
             <label style={labelStyle}>E-mail</label>
             <input
               value={login}
@@ -1387,10 +1426,11 @@ export default function App() {
         style={{
           background: estilos.branco,
           borderBottom: `1px solid ${estilos.borda}`,
-          padding: "14px 24px",
+          padding: isMobile ? "12px 14px" : "14px 24px",
           display: "flex",
+          flexDirection: isMobile ? "column" : "row",
           justifyContent: "space-between",
-          alignItems: "center",
+          alignItems: isMobile ? "stretch" : "center",
           gap: 20,
           flexWrap: "wrap",
           position: "sticky",
@@ -1398,16 +1438,26 @@ export default function App() {
           zIndex: 20,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: isMobile ? 12 : 18,
+          }}
+        >
           <img
             src={LOGO_URL}
             alt="DubWorks"
-            style={{ width: 120, height: "auto", objectFit: "contain" }}
+            style={{
+              width: isMobile ? 92 : 120,
+              height: "auto",
+              objectFit: "contain",
+            }}
           />
           <div>
             <div
               style={{
-                fontSize: 28,
+                fontSize: isMobile ? 22 : 28,
                 fontWeight: 800,
                 color: estilos.azulEscuro,
               }}
@@ -1461,7 +1511,9 @@ export default function App() {
             Sair
           </button>
 
-          <div style={{ textAlign: "right", minWidth: 120 }}>
+          <div
+            style={{ textAlign: isMobile ? "left" : "right", minWidth: 120 }}
+          >
             <div style={{ fontWeight: 700 }}>{usuarioLogado.nome}</div>
             <div style={{ color: estilos.textoSuave, fontSize: 14 }}>
               {cargoLabel(usuarioLogado.cargo)}
@@ -1470,11 +1522,13 @@ export default function App() {
         </div>
       </header>
 
-      <main style={{ padding: 24 }}>
+      <main style={{ padding: isMobile ? 12 : 24 }}>
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gridTemplateColumns: isMobile
+              ? "repeat(2, minmax(0, 1fr))"
+              : "repeat(auto-fit, minmax(220px, 1fr))",
             gap: 16,
             marginBottom: 18,
           }}
@@ -1502,7 +1556,11 @@ export default function App() {
             ...cardStyle,
             marginBottom: 18,
             display: "grid",
-            gridTemplateColumns: "1.4fr 220px 170px 170px 170px",
+            gridTemplateColumns: isMobile
+              ? "1fr"
+              : isTablet
+              ? "1fr 1fr"
+              : "1.4fr 220px 170px 170px 170px",
             gap: 12,
             alignItems: "center",
           }}
@@ -1555,7 +1613,7 @@ export default function App() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1.45fr 1fr",
+            gridTemplateColumns: isTablet ? "1fr" : "1.45fr 1fr",
             gap: 20,
             alignItems: "start",
           }}
@@ -1724,7 +1782,7 @@ export default function App() {
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
+                      gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
                       gap: 12,
                     }}
                   >
@@ -1929,7 +1987,9 @@ export default function App() {
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "1fr 1fr 1fr auto",
+                        gridTemplateColumns: isMobile
+                          ? "1fr"
+                          : "1fr 1fr 1fr auto",
                         gap: 10,
                         marginBottom: 14,
                       }}
@@ -2100,7 +2160,11 @@ export default function App() {
           onClose={() => setMostrarNovoProjeto(false)}
         >
           <div
-            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+              gap: 12,
+            }}
           >
             <Campo
               label="Projeto"
@@ -2197,7 +2261,7 @@ export default function App() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr auto",
+                gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr auto",
                 gap: 10,
                 marginBottom: 12,
               }}
@@ -2312,7 +2376,7 @@ export default function App() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr",
+                gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
                 gap: 12,
               }}
             >
