@@ -1948,10 +1948,10 @@ export default function App() {
         style={{
           background: estilos.branco,
           borderBottom: `1px solid ${estilos.borda}`,
-          padding: isMobile ? "10px 12px" : "14px 24px",
+          padding: isMobile ? "8px 10px" : "8px 18px",
           display: "flex",
-          flexDirection: "column",
-          gap: isMobile ? 10 : 16,
+          flexDirection: isMobile ? "column" : "row",
+          gap: isMobile ? 8 : 12,
           position: "sticky",
           top: 0,
           zIndex: 30,
@@ -1963,14 +1963,14 @@ export default function App() {
             alignItems: "center",
             justifyContent: "space-between",
             gap: isMobile ? 8 : 18,
-            width: "100%",
+            width: isMobile ? "100%" : "auto",
           }}
         >
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: isMobile ? 10 : 18,
+              gap: isMobile ? 8 : 14,
               minWidth: 0,
               flex: 1,
             }}
@@ -1979,7 +1979,7 @@ export default function App() {
               src={LOGO_URL}
               alt="DubWorks"
               style={{
-                width: isMobile ? 68 : 120,
+                width: isMobile ? 62 : 96,
                 height: "auto",
                 objectFit: "contain",
                 flexShrink: 0,
@@ -1988,7 +1988,7 @@ export default function App() {
             <div style={{ minWidth: 0 }}>
               <div
                 style={{
-                  fontSize: isMobile ? 17 : 28,
+                  fontSize: isMobile ? 16 : 22,
                   fontWeight: 800,
                   color: estilos.azulEscuro,
                   lineHeight: 1.05,
@@ -1996,52 +1996,70 @@ export default function App() {
               >
                 DubWorks Manager
               </div>
-              {!isMobile && (
-                <div style={{ color: estilos.textoSuave, marginTop: 4 }}>
+              {isMobile ? (
+                <div
+                  style={{
+                    color: estilos.textoSuave,
+                    marginTop: 3,
+                    fontSize: 12,
+                    lineHeight: 1.2,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    maxWidth: 180,
+                  }}
+                >
+                  {usuarioLogado.nome} • {cargoLabel(usuarioLogado.cargo)}
+                </div>
+              ) : (
+                <div
+                  style={{
+                    color: estilos.textoSuave,
+                    marginTop: 3,
+                    fontSize: 13,
+                  }}
+                >
                   Acesso interno de gerenciamento
                 </div>
               )}
             </div>
           </div>
 
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: isMobile ? 6 : 10,
-              flexShrink: 0,
-              textAlign: "right",
-            }}
-          >
-            {!isMobile && (
-              <div>
-                <div style={{ fontWeight: 800 }}>{usuarioLogado.nome}</div>
-                <div style={{ color: estilos.textoSuave, fontSize: 14 }}>
-                  {cargoLabel(usuarioLogado.cargo)}
-                </div>
-              </div>
-            )}
+          {isMobile && (
             <div
               style={{
-                ...avatarStyle,
-                width: isMobile ? 42 : avatarStyle.width,
-                height: isMobile ? 42 : avatarStyle.height,
-                fontSize: isMobile ? 16 : avatarStyle.fontSize,
+                display: "flex",
+                alignItems: "center",
+                gap: 6,
+                flexShrink: 0,
+                textAlign: "right",
               }}
             >
-              {usuarioLogado.nome?.charAt(0)?.toUpperCase() || "U"}
+              <div
+                style={{
+                  ...avatarStyle,
+                  width: 40,
+                  height: 40,
+                  fontSize: 16,
+                }}
+              >
+                {usuarioLogado.nome?.charAt(0)?.toUpperCase() || "U"}
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: isMobile ? "center" : "flex-end",
-            gap: isMobile ? 6 : 16,
-            flexWrap: "wrap",
-            width: "100%",
+            justifyContent: isMobile ? "flex-start" : "flex-end",
+            gap: isMobile ? 6 : 14,
+            flexWrap: isMobile ? "nowrap" : "wrap",
+            width: isMobile ? "100%" : "auto",
+            flex: isMobile ? undefined : 1,
+            overflowX: isMobile ? "auto" : "visible",
+            paddingBottom: isMobile ? 2 : 0,
           }}
         >
           <button
@@ -2051,8 +2069,8 @@ export default function App() {
             }}
             style={{
               ...menuTopoStyle,
-              fontSize: isMobile ? 14 : 16,
-              padding: isMobile ? "8px 8px" : undefined,
+              fontSize: isMobile ? 13 : 15,
+              padding: isMobile ? "7px 7px" : undefined,
             }}
           >
             Home
@@ -2063,8 +2081,8 @@ export default function App() {
             style={{
               ...menuTopoStyle,
               color: mostrarFerramentas ? estilos.azul : estilos.texto,
-              fontSize: isMobile ? 14 : 16,
-              padding: isMobile ? "8px 8px" : undefined,
+              fontSize: isMobile ? 13 : 15,
+              padding: isMobile ? "7px 7px" : undefined,
             }}
           >
             Ferramentas
@@ -2077,8 +2095,8 @@ export default function App() {
             }}
             style={{
               ...menuTopoStyle,
-              fontSize: isMobile ? 14 : 16,
-              padding: isMobile ? "8px 8px" : undefined,
+              fontSize: isMobile ? 13 : 15,
+              padding: isMobile ? "7px 7px" : undefined,
             }}
           >
             Ajuda
@@ -2106,13 +2124,46 @@ export default function App() {
             onClick={sair}
             style={{
               ...botaoSecundarioStyle,
-              padding: isMobile ? "9px 12px" : botaoSecundarioStyle.padding,
-              fontSize: isMobile ? 14 : 16,
-              borderRadius: isMobile ? 14 : botaoSecundarioStyle.borderRadius,
+              padding: isMobile ? "8px 10px" : "10px 16px",
+              fontSize: isMobile ? 13 : 15,
+              borderRadius: isMobile ? 13 : botaoSecundarioStyle.borderRadius,
+              whiteSpace: "nowrap",
             }}
           >
             Sair
           </button>
+
+          {!isMobile && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 10,
+                textAlign: "right",
+                marginLeft: 8,
+                flexShrink: 0,
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 800, lineHeight: 1.1 }}>
+                  {usuarioLogado.nome}
+                </div>
+                <div style={{ color: estilos.textoSuave, fontSize: 13 }}>
+                  {cargoLabel(usuarioLogado.cargo)}
+                </div>
+              </div>
+              <div
+                style={{
+                  ...avatarStyle,
+                  width: 44,
+                  height: 44,
+                  fontSize: 18,
+                }}
+              >
+                {usuarioLogado.nome?.charAt(0)?.toUpperCase() || "U"}
+              </div>
+            </div>
+          )}
         </div>
 
         {mostrarFerramentas && (
