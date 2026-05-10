@@ -89,6 +89,10 @@ type Projeto = {
   Registro_Semanal: string;
   Observacoes: string;
   Capa_URL: string;
+  Drive_Pasta_Link: string;
+  Drive_Videos_Link: string;
+  Drive_Cortes_Link: string;
+  Drive_Final_Link: string;
   Arquivado: boolean;
   Elenco: ElencoItem[];
 };
@@ -135,6 +139,10 @@ const projetoVazio: Projeto = {
   Registro_Semanal: "",
   Observacoes: "",
   Capa_URL: "",
+  Drive_Pasta_Link: "",
+  Drive_Videos_Link: "",
+  Drive_Cortes_Link: "",
+  Drive_Final_Link: "",
   Arquivado: false,
   Elenco: [],
 };
@@ -199,8 +207,8 @@ function corStatusMembro(status?: StatusMembro) {
   const s = status || "na_comunidade";
   if (s === "na_comunidade")
     return { bg: "rgba(8,116,67,0.22)", color: "#087443" };
-  if (s === "saiu") return { bg: "rgba(15,23,42,0.96)4e5", color: "#b45309" };
-  if (s === "banido") return { bg: "rgba(15,23,42,0.96)1f0", color: "#c2410c" };
+  if (s === "saiu") return { bg: "rgba(180,83,9,0.22)", color: "#f59e0b" };
+  if (s === "banido") return { bg: "rgba(194,65,12,0.22)", color: "#fb7185" };
   return { bg: "rgba(37,99,235,0.20)", color: "#93c5fd" };
 }
 
@@ -384,7 +392,7 @@ function corStatus(status: string) {
     return { bg: "rgba(37,99,235,0.20)", color: "#93c5fd" };
   }
   if (s.indexOf("interromp") !== -1 || s.indexOf("paus") !== -1) {
-    return { bg: "rgba(15,23,42,0.96)1f0", color: "#c2410c" };
+    return { bg: "rgba(194,65,12,0.22)", color: "#fb7185" };
   }
   if (s.indexOf("stand") !== -1) {
     return { bg: "rgba(37,99,235,0.20)", color: "#93c5fd" };
@@ -440,6 +448,10 @@ function mapProjetoDb(item: any, elenco: ElencoItem[]): Projeto {
     Registro_Semanal: item.registro_semanal || "",
     Observacoes: item.observacoes || "",
     Capa_URL: item.capa_url || "",
+    Drive_Pasta_Link: item.drive_pasta_link || item.Drive_Pasta_Link || "",
+    Drive_Videos_Link: item.drive_videos_link || item.Drive_Videos_Link || "",
+    Drive_Cortes_Link: item.drive_cortes_link || item.Drive_Cortes_Link || "",
+    Drive_Final_Link: item.drive_final_link || item.Drive_Final_Link || "",
     Arquivado: Boolean(item.arquivado),
     Elenco: elenco,
   };
@@ -619,7 +631,7 @@ async function criarProjetoBanco(projeto: Projeto): Promise<string | null> {
         data_inicio: projeto.Data_Inicio,
         video_editor_link: projeto.Video_Editor_Link,
         registro_semanal: projeto.Registro_Semanal,
-        observacoes: projeto.Observacoes,
+        observacoes: projeto.Observacoes || "",
         capa_url: projeto.Capa_URL,
         arquivado: projeto.Arquivado || false,
       },
@@ -652,7 +664,7 @@ async function atualizarProjetoBanco(projeto: Projeto): Promise<boolean> {
       data_inicio: projeto.Data_Inicio,
       video_editor_link: projeto.Video_Editor_Link,
       registro_semanal: projeto.Registro_Semanal,
-      observacoes: projeto.Observacoes,
+      observacoes: projeto.Observacoes || "",
       capa_url: projeto.Capa_URL,
       arquivado: projeto.Arquivado || false,
     })
@@ -738,6 +750,12 @@ function parseDataFlex(valor?: string | null): Date | null {
   const texto = String(valor).trim();
   if (!texto) return null;
 
+  const isoSimples = texto.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (isoSimples) {
+    const [, ano, mes, dia] = isoSimples;
+    return new Date(Number(ano), Number(mes) - 1, Number(dia));
+  }
+
   const dataIso = new Date(texto);
   if (!Number.isNaN(dataIso.getTime())) return dataIso;
 
@@ -793,6 +811,52 @@ function gerarMesesEntre(inicio: string, fim: string) {
   return meses;
 }
 
+function extrairLinksDrive(observacoes?: string) {
+  const texto = observacoes || "";
+  const inicio = texto.indexOf("[[DRIVE_LINKS]]");
+  const fim = texto.indexOf("[[/DRIVE_LINKS]]");
+
+  if (inicio === -1 || fim === -1) {
+    return {
+      pasta: "",
+      videos: "",
+      cortes: "",
+      finalizados: "",
+    };
+  }
+
+  try {
+    const json = texto.slice(inicio + "[[DRIVE_LINKS]]".length, fim).trim();
+
+    return {
+      pasta: "",
+      videos: "",
+      cortes: "",
+      finalizados: "",
+      ...JSON.parse(json),
+    };
+  } catch {
+    return {
+      pasta: "",
+      videos: "",
+      cortes: "",
+      finalizados: "",
+    };
+  }
+}
+
+function salvarLinksDriveEmObservacoes(observacoes: string, links: any) {
+  const base = (observacoes || "")
+    .replace(/\[\[DRIVE_LINKS\]\][\s\S]*?\[\[\/DRIVE_LINKS\]\]/g, "")
+    .trim();
+
+  const bloco = `[[DRIVE_LINKS]]
+${JSON.stringify(links, null, 2)}
+[[/DRIVE_LINKS]]`;
+
+  return [base, bloco].filter(Boolean).join("\n\n");
+}
+
 function calcularRelatorioEntradaSaida(membros: Membro[]): RelatorioMes[] {
   const chaves = membros
     .flatMap((m) => [chaveMes(m.data_entrada), chaveMes(m.data_saida)])
@@ -841,6 +905,7 @@ export default function App() {
   const [rascunho, setRascunho] = useState<Projeto | null>(null);
   const [mostrarNovoProjeto, setMostrarNovoProjeto] = useState(false);
   const [mostrarUsuarios, setMostrarUsuarios] = useState(false);
+  const [mostrarFormNovoUsuario, setMostrarFormNovoUsuario] = useState(false);
   const [mostrarMembros, setMostrarMembros] = useState(false);
   const [mostrarFerramentas, setMostrarFerramentas] = useState(false);
   const [categoriaFerramentas, setCategoriaFerramentas] = useState<
@@ -850,6 +915,18 @@ export default function App() {
   const [mostrarRelatorios, setMostrarRelatorios] = useState(false);
   const [mostrarArquivados, setMostrarArquivados] = useState(false);
   const [queryMembros, setQueryMembros] = useState("");
+  const [membroSelecionadoId, setMembroSelecionadoId] = useState<number | null>(
+    null
+  );
+  const [registroSemanalTexto, setRegistroSemanalTexto] = useState("");
+  const [abaProjeto, setAbaProjeto] = useState<
+    | "informacoes"
+    | "elenco"
+    | "registros"
+    | "drive"
+    | "atividades"
+    | "historico"
+  >("informacoes");
   const [carregando, setCarregando] = useState(true);
   const [carregandoLogin, setCarregandoLogin] = useState(false);
   const [larguraTela, setLarguraTela] = useState(
@@ -1127,6 +1204,23 @@ export default function App() {
     const termo = normalizar(queryMembros);
     if (!termo) return membros;
 
+    const statusDireto: Record<string, StatusMembro> = {
+      "na comunidade": "na_comunidade",
+      ativo: "na_comunidade",
+      ativos: "na_comunidade",
+      saiu: "saiu",
+      sairam: "saiu",
+      saíram: "saiu",
+      banido: "banido",
+      banidos: "banido",
+      pausado: "pausado",
+      pausados: "pausado",
+    };
+
+    if (statusDireto[termo]) {
+      return membros.filter((m) => m.status === statusDireto[termo]);
+    }
+
     return membros.filter((m) =>
       [
         m.nome,
@@ -1367,7 +1461,9 @@ export default function App() {
 
     const elencoOk = await salvarElencoProjetoBanco(
       projetoFinal.ID,
-      projetoFinal.Elenco
+      projetoFinal.Elenco.filter(
+        (item) => item.personagem.trim() || item.dublador.trim()
+      )
     );
     if (!elencoOk) {
       alert("Projeto salvo, mas houve erro ao salvar o elenco.");
@@ -1562,33 +1658,82 @@ export default function App() {
     }));
   }
 
-  function adicionarElencoRascunho() {
-    if (!rascunho) return;
-    if (
-      !novoElencoRascunho.personagem.trim() ||
-      !novoElencoRascunho.dublador.trim()
-    ) {
-      alert("Preencha personagem e dublador.");
-      return;
-    }
-
-    setRascunho({
-      ...rascunho,
-      Elenco: [
-        ...rascunho.Elenco,
-        { ...novoElencoRascunho, id: gerarIdTemporario() },
-      ],
-    });
-
-    setNovoElencoRascunho(elencoVazio);
-  }
-
   function removerElencoRascunho(id: string) {
     if (!rascunho) return;
     setRascunho({
       ...rascunho,
       Elenco: rascunho.Elenco.filter((item) => item.id !== id),
     });
+  }
+
+  function adicionarElencoRascunho() {
+    if (!rascunho) return;
+
+    const novoItem: ElencoItem = {
+      id: `novo-${Date.now()}`,
+      personagem: "",
+      dublador: "",
+      funcao: "",
+    };
+
+    setRascunho({
+      ...rascunho,
+      Elenco: [...(rascunho.Elenco || []), novoItem],
+    });
+  }
+
+  function atualizarElencoRascunho(
+    index: number,
+    campo: keyof ElencoItem,
+    valor: string
+  ) {
+    if (!rascunho) return;
+
+    const novoElenco = [...(rascunho.Elenco || [])];
+    novoElenco[index] = {
+      ...novoElenco[index],
+      [campo]: valor,
+    };
+
+    setRascunho({
+      ...rascunho,
+      Elenco: novoElenco,
+    });
+  }
+
+  async function excluirElencoRascunho(item: ElencoItem, index: number) {
+    if (!rascunho) return;
+
+    const confirmar = confirm(
+      `Remover ${item.personagem || "este personagem"} do elenco?`
+    );
+    if (!confirmar) return;
+
+    const novoElenco = rascunho.Elenco.filter((_, i) => i !== index);
+
+    setRascunho({
+      ...rascunho,
+      Elenco: novoElenco,
+    });
+
+    const idNumerico = Number(item.id);
+
+    if (item.id && !Number.isNaN(idNumerico)) {
+      const { error } = await supabase
+        .from("elenco")
+        .delete()
+        .eq("id", idNumerico);
+
+      if (error) {
+        console.error("Erro ao excluir elenco:", error);
+        alert(
+          "Não consegui excluir no banco. Clique em Atualizar para tentar salvar a alteração."
+        );
+        return;
+      }
+
+      await recarregarProjetos();
+    }
   }
 
   async function atualizarPermissaoUsuario(
@@ -1746,6 +1891,32 @@ export default function App() {
     }
 
     await recarregarMembros();
+  }
+
+  async function atualizarMembroCampo(
+    membro: Membro,
+    campo: "data_entrada" | "data_saida" | "observacao",
+    valor: string
+  ) {
+    if (!membro.id || !podeGerenciarMembros(usuarioLogado)) return;
+
+    const payload: any = { [campo]: valor || null };
+    const { error } = await supabase
+      .from("membros")
+      .update(payload)
+      .eq("id", membro.id);
+
+    if (error) {
+      console.error("Erro ao atualizar membro:", error);
+      alert("Não consegui atualizar o membro.");
+      return;
+    }
+
+    setMembros((lista) =>
+      lista.map((item) =>
+        item.id === membro.id ? { ...item, [campo]: valor || null } : item
+      )
+    );
   }
 
   function exportarMembrosCSV() {
@@ -2061,146 +2232,1338 @@ export default function App() {
     );
   }
 
-  return (
-    <div
-      style={{
-        minHeight: "100vh",
-        background:
-          "radial-gradient(circle at top left, rgba(37, 99, 235, 0.16), transparent 30%), radial-gradient(circle at 85% 20%, rgba(14, 165, 233, 0.10), transparent 28%), #050816",
-        fontFamily: "Arial, sans-serif",
-        color: estilos.texto,
-      }}
-    >
-      <style>{estilosAnimacao}</style>
-      <header
+  const telaAtual = mostrarMembros
+    ? "membros"
+    : mostrarUsuarios
+    ? "usuarios"
+    : mostrarRelatorios
+    ? "relatorios"
+    : "projetos";
+
+  const projetoPainel = selecionado || null;
+
+  const projetoDrive = rascunho || projetoPainel;
+  const driveSalvo = extrairLinksDrive(projetoDrive?.Observacoes);
+
+  const driveLinks: {
+    chave: "pasta" | "videos" | "cortes" | "finalizados";
+    titulo: string;
+    descricao: string;
+    icone: string;
+    cor: string;
+    link: string;
+  }[] = [
+    {
+      chave: "pasta",
+      titulo: "Pasta Principal",
+      descricao: "Pasta principal do projeto com todos os materiais.",
+      icone: "📁",
+      cor: "#2563eb",
+      link: driveSalvo.pasta || "",
+    },
+    {
+      chave: "videos",
+      titulo: "Vídeos dos Personagens",
+      descricao: "Links de vídeos/testes separados por personagem.",
+      icone: "🎙️",
+      cor: "#7c3aed",
+      link: driveSalvo.videos || "",
+    },
+    {
+      chave: "cortes",
+      titulo: "Cortes / Cenas",
+      descricao: "Cortes, cenas brutas e arquivos de edição.",
+      icone: "✂️",
+      cor: "#16a34a",
+      link: driveSalvo.cortes || "",
+    },
+    {
+      chave: "finalizados",
+      titulo: "Finalizados",
+      descricao: "Episódios finalizados e prontos para postagem.",
+      icone: "🎬",
+      cor: "#f97316",
+      link: driveSalvo.finalizados || "",
+    },
+  ];
+
+  const historicoProjetoDemo = [
+    {
+      usuario: "Uta",
+      acao: "alterou o link da pasta principal",
+      data: "Hoje, 14:20",
+    },
+    {
+      usuario: "Uta",
+      acao: "incluiu um novo teste de vídeo",
+      data: "Hoje, 13:05",
+    },
+    {
+      usuario: usuarioLogado?.nome || "Sistema",
+      acao: "atualizou as informações do projeto",
+      data: "Ontem, 18:42",
+    },
+  ];
+
+  // TODO SUPABASE:
+  // Estas notificações deverão ser geradas automaticamente
+  // com base nas ações reais dos usuários.
+  // Exemplo:
+  // criar projeto, alterar link, enviar relatório, adicionar elenco etc.
+
+  const notificacoesDiretoriaDemo = [
+    {
+      usuario: "Uta",
+      acao: "finalizou um projeto",
+      data: "Hoje, 15:10",
+      tipo: "Finalização",
+    },
+    {
+      usuario: "Uta",
+      acao: "abriu um novo projeto",
+      data: "Hoje, 12:30",
+      tipo: "Novo projeto",
+    },
+    {
+      usuario: "Uta",
+      acao: "enviou o relatório semanal",
+      data: "Ontem, 20:15",
+      tipo: "Relatório",
+    },
+    {
+      usuario: "Uta",
+      acao: "adicionou um novo membro ao elenco",
+      data: "Ontem, 17:04",
+      tipo: "Elenco",
+    },
+  ];
+
+  function abrirLink(link?: string) {
+    if (!link) {
+      alert("Link ainda não cadastrado.");
+      return;
+    }
+    window.open(link, "_blank", "noopener,noreferrer");
+  }
+
+  const membroSelecionado =
+    membros.find((m) => m.id === membroSelecionadoId) || null;
+
+  function cargoMembro(membro: Membro | null) {
+    if (!membro) return "Membro";
+    const alvo = normalizar(membro.email || membro.nome);
+    const perfil = usuarios.find(
+      (u) =>
+        normalizar(u.login) === alvo ||
+        normalizar(u.nome) === normalizar(membro.nome)
+    );
+    return perfil ? cargoLabel(perfil.cargo) : "Membro";
+  }
+
+  async function salvarRegistroSemanalProjeto() {
+    if (!projetoPainel || !registroSemanalTexto.trim()) {
+      alert("Selecione um projeto e escreva o registro semanal.");
+      return;
+    }
+
+    const agora = new Date();
+    const carimbo = agora.toLocaleString("pt-BR");
+    const autor = usuarioLogado?.nome || "Usuário";
+    const novoRegistro = `[${carimbo}] ${autor}: ${registroSemanalTexto.trim()}`;
+    const registroAnterior = projetoPainel.Registro_Semanal || "";
+    const projetoAtualizado: Projeto = {
+      ...projetoPainel,
+      Registro_Semanal: [novoRegistro, registroAnterior]
+        .filter(Boolean)
+        .join("\n\n"),
+    };
+
+    const ok = await atualizarProjetoBanco(projetoAtualizado);
+    if (!ok) {
+      alert("Não consegui salvar o registro semanal.");
+      return;
+    }
+
+    setRegistroSemanalTexto("");
+    await recarregarProjetos();
+    alert("Registro semanal salvo com data e hora.");
+  }
+
+  const SidebarItem = ({
+    id,
+    label,
+    icon,
+    onClick,
+  }: {
+    id: string;
+    label: string;
+    icon: string;
+    onClick: () => void;
+  }) => {
+    const ativo = telaAtual === id;
+    return (
+      <button
+        onClick={onClick}
         style={{
-          background: estilos.branco,
-          borderBottom: `1px solid ${estilos.borda}`,
-          padding: isMobile ? "12px 14px" : "14px 24px",
+          width: "100%",
           display: "flex",
-          flexDirection: isMobile ? "column" : "row",
-          justifyContent: "space-between",
-          alignItems: isMobile ? "stretch" : "center",
-          gap: isMobile ? 14 : 20,
-          flexWrap: "wrap",
-          position: "relative",
-          top: 0,
-          zIndex: 30,
+          alignItems: "center",
+          gap: 14,
+          border: "none",
+          borderRadius: 14,
+          padding: "14px 16px",
+          cursor: "pointer",
+          color: ativo ? "#38bdf8" : "#cbd5e1",
+          background: ativo
+            ? "linear-gradient(90deg, rgba(37,99,235,0.24), rgba(14,165,233,0.08))"
+            : "transparent",
+          textAlign: "left",
+          fontWeight: ativo ? 800 : 700,
+          fontSize: 15,
         }}
       >
+        <span style={{ fontSize: 19, width: 22, textAlign: "center" }}>
+          {icon}
+        </span>
+        {label}
+      </button>
+    );
+  };
+
+  const MiniStat = ({
+    icon,
+    value,
+    label,
+    color,
+  }: {
+    icon: string;
+    value: string;
+    label: string;
+    color: string;
+  }) => (
+    <div
+      style={{
+        background: "rgba(2,6,23,0.55)",
+        border: "1px solid rgba(148,163,184,0.16)",
+        borderRadius: 14,
+        padding: 14,
+        display: "flex",
+        alignItems: "center",
+        gap: 14,
+      }}
+    >
+      <div
+        style={{
+          width: 46,
+          height: 46,
+          borderRadius: 12,
+          background: `${color}22`,
+          color,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          fontSize: 22,
+        }}
+      >
+        {icon}
+      </div>
+      <div>
+        <div style={{ fontSize: 24, fontWeight: 900, color: "#f8fafc" }}>
+          {value}
+        </div>
+        <div style={{ fontSize: 12, color: "#94a3b8" }}>{label}</div>
+      </div>
+    </div>
+  );
+
+  const ProjectList = () => (
+    <div
+      style={{
+        ...painelDarkStyle,
+        minHeight: 240,
+        overflow: "hidden",
+      }}
+    >
+      <div style={painelHeaderStyle}>
+        <h2 style={tituloCardDarkStyle}>Projetos ativos</h2>
+        <span style={{ color: "#94a3b8", fontSize: 13 }}>
+          {filtrados.length} projeto(s)
+        </span>
+      </div>
+
+      <div style={{ overflowX: "auto" }}>
+        <table
+          style={{ width: "100%", borderCollapse: "collapse", minWidth: 760 }}
+        >
+          <thead>
+            <tr>
+              {[
+                "ID",
+                "Projeto",
+                "Tipo",
+                "Gênero",
+                "Prioridade",
+                "Status",
+                "Líder",
+                "Editor",
+              ].map((h) => (
+                <th key={h} style={tabelaHeaderDarkStyle}>
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {filtrados.slice(0, 35).map((p) => {
+              const statusCor = corStatus(p.Status);
+              const ativo = p.ID === projetoPainel?.ID;
+              return (
+                <tr
+                  key={p.ID}
+                  onClick={() => setSelecionadoId(p.ID)}
+                  style={{
+                    cursor: "pointer",
+                    background: ativo ? "rgba(37,99,235,0.18)" : "transparent",
+                    borderBottom: "1px solid rgba(148,163,184,0.10)",
+                  }}
+                >
+                  <td style={tabelaCellDarkStyle}>{p.ID}</td>
+                  <td
+                    style={{
+                      ...tabelaCellDarkStyle,
+                      fontWeight: 800,
+                      color: "#f8fafc",
+                    }}
+                  >
+                    {p.Projeto}
+                    <div
+                      style={{
+                        color: "#94a3b8",
+                        fontWeight: 500,
+                        fontSize: 12,
+                      }}
+                    >
+                      {p.Elenco.length} registro(s) de elenco
+                    </div>
+                  </td>
+                  <td style={tabelaCellDarkStyle}>{p.Tipo || "-"}</td>
+                  <td style={tabelaCellDarkStyle}>{p.Genero || "-"}</td>
+                  <td style={tabelaCellDarkStyle}>{p.Prioridade || "-"}</td>
+                  <td style={tabelaCellDarkStyle}>
+                    <span
+                      style={{
+                        background: statusCor.bg,
+                        color: statusCor.color,
+                        border: "1px solid rgba(148,163,184,0.12)",
+                        padding: "6px 10px",
+                        borderRadius: 10,
+                        fontWeight: 800,
+                        fontSize: 12,
+                      }}
+                    >
+                      {p.Status || "Sem status"}
+                    </span>
+                  </td>
+                  <td style={tabelaCellDarkStyle}>{p.Lider || "-"}</td>
+                  <td style={tabelaCellDarkStyle}>{p.Editor || "-"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const ProjectDetails = () => {
+    if (!projetoPainel) {
+      return (
+        <div style={painelDarkStyle}>
+          <h2 style={tituloCardDarkStyle}>Nenhum projeto selecionado</h2>
+          <p style={{ color: "#94a3b8" }}>
+            Selecione um projeto na lista ou crie um novo projeto.
+          </p>
+        </div>
+      );
+    }
+
+    const statusCor = corStatus(projetoPainel.Status);
+    return (
+      <div style={{ display: "grid", gap: 18 }}>
         <div
           style={{
+            background: projetoPainel.Capa_URL
+              ? `linear-gradient(rgba(2,6,23,0.25), rgba(2,6,23,0.72)), url(${projetoPainel.Capa_URL}) center/cover`
+              : "linear-gradient(135deg, rgba(37,99,235,0.95), rgba(14,165,233,0.68))",
+            border: "1px solid rgba(56,189,248,0.24)",
+            borderRadius: 22,
+            padding: 38,
+            minHeight: 170,
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
-            width: isMobile ? "100%" : "auto",
-            gap: isMobile ? 10 : 18,
+            justifyContent: "center",
+            textAlign: "center",
+            boxShadow: "0 22px 60px rgba(37,99,235,0.22)",
           }}
         >
+          <h2
+            style={{
+              margin: 0,
+              color: "#fff",
+              fontSize: 26,
+              textShadow: "0 2px 18px rgba(0,0,0,0.48)",
+            }}
+          >
+            {projetoPainel.Projeto}
+          </h2>
+        </div>
+
+        <div style={painelDarkStyle}>
           <div
             style={{
               display: "flex",
-              alignItems: "center",
-              gap: isMobile ? 12 : 18,
-              minWidth: 0,
+              justifyContent: "space-between",
+              gap: 12,
+              alignItems: "flex-start",
             }}
           >
-            <img
-              src={LOGO_URL}
-              alt="DubWorks"
-              style={{
-                width: isMobile ? 86 : 120,
-                height: "auto",
-                objectFit: "contain",
-                flexShrink: 0,
-              }}
-            />
-            <div style={{ minWidth: 0 }}>
-              <div
-                style={{
-                  fontSize: isMobile ? 22 : 28,
-                  fontWeight: 800,
-                  color: estilos.azulEscuro,
-                  lineHeight: 1.1,
+            <div>
+              <h1 style={{ margin: 0, color: "#dbeafe", fontSize: 26 }}>
+                {projetoPainel.Projeto}
+              </h1>
+              <div style={{ color: "#94a3b8", marginTop: 6 }}>
+                ID: {projetoPainel.ID}
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button
+                onClick={() => {
+                  setSelecionadoId(null);
+                  setRascunho(null);
+                  setAbaProjeto("informacoes");
                 }}
+                style={botaoSecundarioStyle}
               >
-                DubWorks Manager
-              </div>
-              <div style={{ color: estilos.textoSuave, marginTop: 4 }}>
-                Acesso interno de gerenciamento
-              </div>
+                Fechar projeto
+              </button>
+              {!rascunho || rascunho.ID !== projetoPainel.ID ? (
+                <button
+                  onClick={() => setSelecionadoId(projetoPainel.ID)}
+                  style={botaoSecundarioStyle}
+                >
+                  Editar informações
+                </button>
+              ) : (
+                <button onClick={salvarAlteracoes} style={botaoPrimarioStyle}>
+                  Salvar alterações
+                </button>
+              )}
             </div>
           </div>
 
-          {isMobile && (
+          {rascunho && rascunho.ID === projetoPainel.ID ? (
             <div
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                flexShrink: 0,
-                textAlign: "right",
+                display: "grid",
+                gridTemplateColumns: isMobile
+                  ? "1fr"
+                  : "repeat(2, minmax(0, 1fr))",
+                gap: 14,
+                marginTop: 22,
               }}
             >
+              {[
+                ["Projeto", "Projeto"],
+                ["Tipo", "Tipo"],
+                ["Gênero", "Genero"],
+                ["Prioridade", "Prioridade"],
+                ["Status", "Status"],
+                ["Líder", "Lider"],
+                ["Editor", "Editor"],
+                ["Data de início", "Data_Inicio"],
+                ["Capa do projeto (URL)", "Capa_URL"],
+                ["Drive — Pasta principal", "Drive_Pasta_Link"],
+                ["Drive — Vídeos dos personagens", "Drive_Videos_Link"],
+                ["Drive — Cortes / Cenas", "Drive_Cortes_Link"],
+                ["Drive — Finalizados", "Drive_Final_Link"],
+              ].map(([label, campo]) => (
+                <div key={campo}>
+                  <label style={labelStyle}>{label}</label>
+                  <input
+                    value={String((rascunho as any)[campo] || "")}
+                    onChange={(e) =>
+                      atualizarCampo(campo as keyof Projeto, e.target.value)
+                    }
+                    style={inputStyle}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobile
+                  ? "1fr"
+                  : "repeat(2, minmax(0, 1fr))",
+                gap: 14,
+                marginTop: 22,
+              }}
+            >
+              {[
+                ["Tipo", projetoPainel.Tipo],
+                ["Gênero", projetoPainel.Genero],
+                ["Prioridade", projetoPainel.Prioridade],
+                ["Líder", projetoPainel.Lider],
+                ["Editor", projetoPainel.Editor],
+                ["Data de início", formatarDataBR(projetoPainel.Data_Inicio)],
+              ].map(([label, value]) => (
+                <div key={label}>
+                  <div style={{ color: "#94a3b8", fontSize: 13 }}>{label}</div>
+                  <div
+                    style={{ color: "#f8fafc", fontWeight: 800, marginTop: 4 }}
+                  >
+                    {value || "-"}
+                  </div>
+                </div>
+              ))}
               <div>
-                <div style={{ fontWeight: 800, color: estilos.texto }}>
-                  {usuarioLogado.nome}
-                </div>
-                <div style={{ color: estilos.textoSuave, fontSize: 13 }}>
-                  {cargoLabel(usuarioLogado.cargo)}
-                </div>
-              </div>
-              <div style={avatarStyle}>
-                {usuarioLogado.nome?.charAt(0)?.toUpperCase() || "U"}
+                <div style={{ color: "#94a3b8", fontSize: 13 }}>Status</div>
+                <span
+                  style={{
+                    display: "inline-block",
+                    marginTop: 6,
+                    background: statusCor.bg,
+                    color: statusCor.color,
+                    border: "1px solid rgba(148,163,184,0.12)",
+                    padding: "8px 12px",
+                    borderRadius: 10,
+                    fontWeight: 900,
+                  }}
+                >
+                  {projetoPainel.Status || "Sem status"}
+                </span>
               </div>
             </div>
           )}
         </div>
+      </div>
+    );
+  };
 
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: isMobile ? "center" : "flex-end",
-            gap: isMobile ? 10 : 18,
-            flexWrap: "wrap",
-            flex: 1,
-          }}
-        >
-          <button
-            onClick={() => {
-              setMostrarFerramentas(false);
-              window.scrollTo({ top: 0, behavior: "smooth" });
-            }}
-            style={menuTopoStyle}
-          >
-            Home
-          </button>
-
-          <button
-            onClick={() => setMostrarFerramentas((valor) => !valor)}
+  const DrivePanel = () => (
+    <div style={painelDarkStyle}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          gap: 12,
+          alignItems: "flex-start",
+          marginBottom: 18,
+        }}
+      >
+        <div>
+          <h2
             style={{
-              ...menuTopoStyle,
-              color: mostrarFerramentas ? estilos.azul : estilos.texto,
+              ...tituloCardDarkStyle,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
             }}
           >
-            Ferramentas
-          </button>
+            <span>📁</span> Arquivos do Drive
+          </h2>
+          <p style={{ color: "#94a3b8", margin: "8px 0 0" }}>
+            Cole os links do Drive nos campos abaixo e clique em “Salvar
+            alterações”.
+          </p>
+        </div>
 
+        {projetoPainel && podeEditarProjeto(usuarioLogado, projetoPainel) && (
+          <button onClick={salvarAlteracoes} style={botaoPrimarioStyle}>
+            Salvar links
+          </button>
+        )}
+      </div>
+
+      <div style={{ display: "grid", gap: 16 }}>
+        {driveLinks.map((item) => (
+          <div
+            key={item.titulo}
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "48px 1fr" : "56px 1fr auto",
+              gap: 14,
+              alignItems: "center",
+              padding: "14px 0",
+              borderTop: "1px solid rgba(148,163,184,0.12)",
+            }}
+          >
+            <div
+              style={{
+                width: 50,
+                height: 50,
+                borderRadius: 12,
+                background: `${item.cor}22`,
+                color: item.cor,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: 22,
+              }}
+            >
+              {item.icone}
+            </div>
+
+            <div>
+              <div style={{ color: "#f8fafc", fontWeight: 900 }}>
+                {item.titulo}
+              </div>
+              <div style={{ color: "#94a3b8", fontSize: 13, marginTop: 4 }}>
+                {item.descricao}
+              </div>
+
+              <input
+                placeholder="Cole o link do Drive aqui"
+                value={item.link || ""}
+                onChange={(e) => {
+                  if (!rascunho) return;
+
+                  const linksAtuais = extrairLinksDrive(rascunho.Observacoes);
+                  const novosLinks = {
+                    ...linksAtuais,
+                    [item.chave]: e.target.value,
+                  };
+
+                  setRascunho({
+                    ...rascunho,
+                    Observacoes: salvarLinksDriveEmObservacoes(
+                      rascunho.Observacoes,
+                      novosLinks
+                    ),
+                  });
+                }}
+                disabled={
+                  !projetoPainel ||
+                  !podeEditarProjeto(usuarioLogado, projetoPainel)
+                }
+                style={{
+                  ...inputStyle,
+                  marginTop: 10,
+                  color: "#38bdf8",
+                  border: "1px solid rgba(37,99,235,0.45)",
+                }}
+              />
+
+              {!podeEditarProjeto(usuarioLogado, projetoPainel) && (
+                <div style={{ color: "#64748b", fontSize: 12, marginTop: 6 }}>
+                  Você pode visualizar este link, mas não tem permissão para
+                  editar.
+                </div>
+              )}
+
+              {isMobile && (
+                <button
+                  onClick={() => abrirLink(item.link || "")}
+                  style={{ ...botaoSecundarioStyle, marginTop: 10 }}
+                >
+                  Abrir ↗
+                </button>
+              )}
+            </div>
+
+            {!isMobile && (
+              <button
+                onClick={() => abrirLink(item.link || "")}
+                style={botaoSecundarioStyle}
+              >
+                Abrir ↗
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const MembersPage = () => (
+    <div style={{ display: "grid", gap: 18 }}>
+      <div style={pageHeaderDarkStyle}>
+        <div>
+          <div style={breadcrumbDarkStyle}>Membros</div>
+          <h1 style={pageTitleDarkStyle}>Central de Membros</h1>
+        </div>
+        <button
+          onClick={async () => {
+            await recarregarMembros();
+            alert("Membros atualizados.");
+          }}
+          style={botaoPrimarioStyle}
+        >
+          Atualizar membros
+        </button>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "repeat(4, 1fr)",
+          gap: 16,
+        }}
+      >
+        <MiniStat
+          icon="👥"
+          value={String(membros.length)}
+          label="Total de membros"
+          color="#38bdf8"
+        />
+        <MiniStat
+          icon="✅"
+          value={String(totalMembrosAtivos)}
+          label="Na comunidade"
+          color="#22c55e"
+        />
+        <MiniStat
+          icon="↪"
+          value={String(totalMembrosSaida)}
+          label="Saíram"
+          color="#f97316"
+        />
+        <MiniStat
+          icon="📈"
+          value={String(
+            relatorioEntradaSaida[relatorioEntradaSaida.length - 1]
+              ?.totalFinal || 0
+          )}
+          label="Crescimento"
+          color="#a78bfa"
+        />
+      </div>
+
+      {membroSelecionado && (
+        <div style={painelDarkStyle}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 12,
+              alignItems: "flex-start",
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <h2 style={tituloCardDarkStyle}>{membroSelecionado.nome}</h2>
+              <p style={{ color: "#94a3b8", marginTop: 6 }}>
+                Pré-visualização do membro selecionado
+              </p>
+            </div>
+            <button
+              onClick={() => setMembroSelecionadoId(null)}
+              style={botaoSecundarioStyle}
+            >
+              Fechar membro
+            </button>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
+              gap: 14,
+              marginTop: 18,
+            }}
+          >
+            <div>
+              <div style={{ color: "#94a3b8", fontSize: 13 }}>Perfil/Cargo</div>
+              <div style={{ color: "#f8fafc", fontWeight: 900 }}>
+                {cargoMembro(membroSelecionado)}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: "#94a3b8", fontSize: 13 }}>Telefone</div>
+              <div style={{ color: "#f8fafc", fontWeight: 900 }}>
+                {membroSelecionado.telefone || "-"}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: "#94a3b8", fontSize: 13 }}>E-mail</div>
+              <div style={{ color: "#f8fafc", fontWeight: 900 }}>
+                {membroSelecionado.email || "-"}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: "#94a3b8", fontSize: 13 }}>Idade</div>
+              <div style={{ color: "#f8fafc", fontWeight: 900 }}>
+                {membroSelecionado.idade || "-"}
+              </div>
+            </div>
+            <div>
+              <div style={{ color: "#94a3b8", fontSize: 13 }}>Entrada</div>
+              <input
+                type="date"
+                value={membroSelecionado.data_entrada || ""}
+                onChange={(e) =>
+                  atualizarMembroCampo(
+                    membroSelecionado,
+                    "data_entrada",
+                    e.target.value
+                  )
+                }
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <div style={{ color: "#94a3b8", fontSize: 13 }}>Status</div>
+              <select
+                value={membroSelecionado.status}
+                onChange={(e) =>
+                  alterarStatusMembro(
+                    membroSelecionado,
+                    e.target.value as StatusMembro
+                  )
+                }
+                style={inputStyle}
+              >
+                <option value="na_comunidade">Na comunidade</option>
+                <option value="saiu">Saiu</option>
+                <option value="banido">Banido</option>
+                <option value="pausado">Pausado</option>
+              </select>
+            </div>
+            <div>
+              <div style={{ color: "#94a3b8", fontSize: 13 }}>Saída</div>
+              <input
+                type="date"
+                value={membroSelecionado.data_saida || ""}
+                onChange={(e) =>
+                  atualizarMembroCampo(
+                    membroSelecionado,
+                    "data_saida",
+                    e.target.value
+                  )
+                }
+                style={inputStyle}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginTop: 18 }}>
+            <div style={{ color: "#94a3b8", fontSize: 13 }}>Habilidades</div>
+            <div style={{ color: "#cbd5e1", marginTop: 6 }}>
+              {membroSelecionado.habilidades || "Não informado."}
+            </div>
+          </div>
+
+          <div style={{ marginTop: 14 }}>
+            <div style={{ color: "#94a3b8", fontSize: 13 }}>Observações</div>
+            <textarea
+              value={membroSelecionado.observacao || ""}
+              onChange={(e) =>
+                setMembros((lista) =>
+                  lista.map((item) =>
+                    item.id === membroSelecionado.id
+                      ? { ...item, observacao: e.target.value }
+                      : item
+                  )
+                )
+              }
+              onBlur={(e) =>
+                atualizarMembroCampo(
+                  membroSelecionado,
+                  "observacao",
+                  e.target.value
+                )
+              }
+              style={{ ...textareaStyle, minHeight: 90, marginTop: 6 }}
+            />
+          </div>
+        </div>
+      )}
+
+      <div style={painelDarkStyle}>
+        <input
+          placeholder="Buscar por nome, telefone, e-mail, status ou observação..."
+          value={queryMembros}
+          onChange={(e) => setQueryMembros(e.target.value)}
+          style={{ ...inputStyle, marginBottom: 16 }}
+        />
+
+        <div style={{ overflowX: "auto" }}>
+          <table
+            style={{ width: "100%", borderCollapse: "collapse", minWidth: 900 }}
+          >
+            <thead>
+              <tr>
+                {[
+                  "Nome",
+                  "Telefone",
+                  "E-mail",
+                  "Idade",
+                  "Entrada",
+                  "Status",
+                  "Saída",
+                ].map((h) => (
+                  <th key={h} style={tabelaHeaderDarkStyle}>
+                    {h}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {membrosFiltrados.slice(0, 80).map((m) => {
+                const cor = corStatusMembro(m.status);
+                return (
+                  <tr
+                    key={m.id || m.nome}
+                    onClick={() => setMembroSelecionadoId(m.id || null)}
+                    style={{
+                      borderBottom: "1px solid rgba(148,163,184,0.10)",
+                      cursor: "pointer",
+                      background:
+                        membroSelecionadoId === m.id
+                          ? "rgba(37,99,235,0.18)"
+                          : "transparent",
+                    }}
+                  >
+                    <td style={{ ...tabelaCellDarkStyle, fontWeight: 800 }}>
+                      {m.nome}
+                    </td>
+                    <td style={tabelaCellDarkStyle}>{m.telefone || "-"}</td>
+                    <td style={tabelaCellDarkStyle}>{m.email || "-"}</td>
+                    <td style={tabelaCellDarkStyle}>{m.idade || "-"}</td>
+                    <td style={tabelaCellDarkStyle}>
+                      {formatarDataBR(m.data_entrada) || "-"}
+                    </td>
+                    <td style={tabelaCellDarkStyle}>
+                      <span
+                        style={{
+                          background: cor.bg,
+                          color: cor.color,
+                          padding: "7px 10px",
+                          borderRadius: 10,
+                          fontWeight: 900,
+                        }}
+                      >
+                        {statusMembroLabel(m.status)}
+                      </span>
+                    </td>
+                    <td style={tabelaCellDarkStyle}>
+                      {formatarDataBR(m.data_saida) || "-"}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {membrosFiltrados.length > 80 && (
+            <div style={{ color: "#94a3b8", marginTop: 12, fontSize: 13 }}>
+              Mostrando 80 de {membrosFiltrados.length}. Use a busca para
+              filtrar.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+
+  const UsersPage = () => (
+    <div style={{ display: "grid", gap: 18 }}>
+      <div
+        style={{
+          ...painelDarkStyle,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: isMobile ? "stretch" : "center",
+          flexDirection: isMobile ? "column" : "row",
+          gap: 12,
+        }}
+      >
+        <div>
+          <h2 style={tituloCardDarkStyle}>Controle de Usuários e Permissões</h2>
+          <p style={{ color: "#94a3b8", marginTop: 6 }}>
+            Gerencie cargos, permissões e acessos internos do sistema.
+          </p>
+        </div>
+
+        <button
+          onClick={() => setMostrarFormNovoUsuario((valor) => !valor)}
+          style={botaoPrimarioStyle}
+        >
+          + Novo usuário
+        </button>
+      </div>
+
+      {mostrarFormNovoUsuario && (
+        <div style={painelDarkStyle}>
+          <h2 style={tituloCardDarkStyle}>Novo usuário</h2>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)",
+              gap: 14,
+              marginTop: 14,
+            }}
+          >
+            <div>
+              <label style={labelStyle}>Nome</label>
+              <input
+                value={novoUsuario.nome}
+                onChange={(e) =>
+                  setNovoUsuario({ ...novoUsuario, nome: e.target.value })
+                }
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>E-mail/Login</label>
+              <input
+                value={novoUsuario.login}
+                onChange={(e) =>
+                  setNovoUsuario({ ...novoUsuario, login: e.target.value })
+                }
+                style={inputStyle}
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>Cargo</label>
+              <select
+                value={novoUsuario.cargo}
+                onChange={(e) => {
+                  const cargo = e.target.value as Cargo;
+                  setNovoUsuario({
+                    ...novoUsuario,
+                    cargo,
+                    training_status: statusPadraoPorCargo(cargo),
+                    ...permissoesPadraoUsuario(cargo),
+                  });
+                }}
+                style={inputStyle}
+              >
+                {cargosPermitidosParaCriar(usuarioLogado).map((cargo) => (
+                  <option key={cargo} value={cargo}>
+                    {cargoLabel(cargo)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Vínculo</label>
+              <input
+                value={novoUsuario.vinculo}
+                onChange={(e) =>
+                  setNovoUsuario({ ...novoUsuario, vinculo: e.target.value })
+                }
+                style={inputStyle}
+              />
+            </div>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
+              gap: 10,
+              marginTop: 16,
+            }}
+          >
+            {permissoesDisponiveis.map((item) => (
+              <label
+                key={item.chave}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                  color: "#cbd5e1",
+                  fontWeight: 700,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  checked={Boolean(novoUsuario[item.chave])}
+                  onChange={(e) =>
+                    setNovoUsuario({
+                      ...novoUsuario,
+                      [item.chave]: e.target.checked,
+                    })
+                  }
+                />
+                {item.label}
+              </label>
+            ))}
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              marginTop: 18,
+              flexWrap: "wrap",
+            }}
+          >
+            <button onClick={criarUsuario} style={botaoPrimarioStyle}>
+              Salvar usuário
+            </button>
+            <button
+              onClick={() => setMostrarFormNovoUsuario(false)}
+              style={botaoSecundarioStyle}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div
+        style={{
+          ...painelDarkStyle,
+          overflowX: "auto",
+        }}
+      >
+        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <thead>
+            <tr>
+              {[
+                "Usuário",
+                "Cargo",
+                "Projetos",
+                "Membros",
+                "Usuários",
+                "Relatórios",
+              ].map((titulo) => (
+                <th
+                  key={titulo}
+                  style={{
+                    textAlign: "left",
+                    padding: 14,
+                    color: "#94a3b8",
+                    fontSize: 13,
+                    borderBottom: "1px solid rgba(148,163,184,0.14)",
+                  }}
+                >
+                  {titulo}
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          <tbody>
+            {usuarios.map((usuario) => (
+              <tr key={usuario.id || usuario.login}>
+                <td
+                  style={{
+                    padding: 14,
+                    borderBottom: "1px solid rgba(148,163,184,0.08)",
+                  }}
+                >
+                  <div style={{ color: "#f8fafc", fontWeight: 700 }}>
+                    {usuario.nome}
+                  </div>
+                  <div style={{ color: "#94a3b8", fontSize: 12 }}>
+                    @{usuario.login}
+                  </div>
+                </td>
+
+                <td style={{ padding: 14, color: "#cbd5e1" }}>
+                  {usuario.cargo}
+                </td>
+
+                {(
+                  [
+                    "acesso_projetos",
+                    "acesso_membros",
+                    "acesso_usuarios",
+                    "acesso_relatorios_projetos",
+                  ] as ChavePermissao[]
+                ).map((chave) => {
+                  const permitido = temAcesso(usuario, chave);
+                  return (
+                    <td
+                      key={chave}
+                      style={{
+                        padding: 14,
+                        color: permitido ? "#22c55e" : "#ef4444",
+                        fontWeight: 700,
+                      }}
+                    >
+                      <label
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 8,
+                          cursor: "pointer",
+                        }}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={permitido}
+                          disabled={!podeGerenciarUsuarios(usuarioLogado)}
+                          onChange={(e) =>
+                            atualizarPermissaoUsuario(
+                              usuario,
+                              chave,
+                              e.target.checked
+                            )
+                          }
+                        />
+                        {permitido ? "Permitido" : "Bloqueado"}
+                      </label>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={pageHeaderDarkStyle}>
+        <div>
+          <div style={breadcrumbDarkStyle}>Usuários</div>
+          <h1 style={pageTitleDarkStyle}>Acessos e Permissões</h1>
+        </div>
+        <button onClick={recarregarUsuarios} style={botaoPrimarioStyle}>
+          Atualizar
+        </button>
+      </div>
+
+      <div style={painelDarkStyle}>
+        <div style={{ overflowX: "auto" }}>
+          <table
+            style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}
+          >
+            <thead>
+              <tr>
+                {["Nome", "Login", "Cargo", "Vínculo", "Treinamento"].map(
+                  (h) => (
+                    <th key={h} style={tabelaHeaderDarkStyle}>
+                      {h}
+                    </th>
+                  )
+                )}
+              </tr>
+            </thead>
+            <tbody>
+              {usuariosVisiveis.map((u) => (
+                <tr
+                  key={u.id || u.login}
+                  style={{ borderBottom: "1px solid rgba(148,163,184,0.10)" }}
+                >
+                  <td style={{ ...tabelaCellDarkStyle, fontWeight: 800 }}>
+                    {u.nome}
+                  </td>
+                  <td style={tabelaCellDarkStyle}>{u.login}</td>
+                  <td style={tabelaCellDarkStyle}>{cargoLabel(u.cargo)}</td>
+                  <td style={tabelaCellDarkStyle}>{u.vinculo || "-"}</td>
+                  <td style={tabelaCellDarkStyle}>
+                    {statusTreinamentoLabel(u.training_status)}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+
+  const ReportsPage = () => (
+    <div style={{ display: "grid", gap: 18 }}>
+      <div style={pageHeaderDarkStyle}>
+        <div>
+          <div style={breadcrumbDarkStyle}>Relatórios</div>
+          <h1 style={pageTitleDarkStyle}>Exportações e Indicadores</h1>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
+          gap: 16,
+        }}
+      >
+        <button onClick={exportarProjetosCSV} style={reportCardDarkStyle}>
+          📌 Exportar Projetos
+        </button>
+        <button onClick={exportarElencoCSV} style={reportCardDarkStyle}>
+          🎙️ Exportar Elenco
+        </button>
+        {podeGerenciarMembros(usuarioLogado) && (
+          <button onClick={exportarMembrosCSV} style={reportCardDarkStyle}>
+            👥 Exportar Membros
+          </button>
+        )}
+        {podeGerenciarMembros(usuarioLogado) && (
           <button
-            onClick={() => {
-              setMostrarFerramentas(false);
-              setMostrarCentralAjuda(true);
-            }}
-            style={menuTopoStyle}
+            onClick={exportarRelatorioEntradaSaidaCSV}
+            style={reportCardDarkStyle}
           >
-            Central de Ajuda
+            📊 Entrada e Saída
           </button>
+        )}
+      </div>
+    </div>
+  );
 
+  const ProjectsPage = () => (
+    <div style={{ display: "grid", gap: 18 }}>
+      <div style={pageHeaderDarkStyle}>
+        <div>
+          <div style={breadcrumbDarkStyle}>Projetos › Detalhes do Projeto</div>
+          <h1 style={pageTitleDarkStyle}>
+            {projetoPainel?.Projeto || "Projetos"}
+            {projetoPainel && (
+              <span
+                style={{
+                  marginLeft: 12,
+                  fontSize: 14,
+                  color: "#38bdf8",
+                  background: "rgba(37,99,235,0.22)",
+                  border: "1px solid rgba(56,189,248,0.18)",
+                  padding: "8px 10px",
+                  borderRadius: 10,
+                  verticalAlign: "middle",
+                }}
+              >
+                Projeto Ativo
+              </span>
+            )}
+          </h1>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          <button
+            onClick={() => setAbaProjeto("atividades")}
+            style={botaoSecundarioStyle}
+            title="Central de notificações da diretoria"
+          >
+            🔔 Notificações ({notificacoesDiretoriaDemo.length})
+          </button>
+          {projetoPainel && (
+            <button
+              onClick={() => {
+                setSelecionadoId(null);
+                setRascunho(null);
+                setAbaProjeto("informacoes");
+              }}
+              style={botaoSecundarioStyle}
+            >
+              Fechar visualização
+            </button>
+          )}
+          {projetoPainel && usuarioLogado?.cargo === "diretoria" && (
+            <button
+              onClick={() =>
+                alterarArquivamentoProjeto(!projetoPainel.Arquivado)
+              }
+              style={botaoSecundarioStyle}
+            >
+              {projetoPainel.Arquivado ? "Desarquivar" : "Arquivar"}
+            </button>
+          )}
           {podeCriarProjeto(usuarioLogado) && (
             <button
               onClick={() => {
-                setMostrarFerramentas(false);
                 limparFormularioProjeto();
                 setMostrarNovoProjeto(true);
               }}
@@ -2209,1892 +3572,902 @@ export default function App() {
               Novo projeto
             </button>
           )}
-
           <button
-            onClick={sair}
-            style={{
-              ...botaoSecundarioStyle,
-              padding: isMobile ? "10px 16px" : botaoSecundarioStyle.padding,
+            onClick={async () => {
+              await recarregarProjetos();
+              alert("Projetos atualizados.");
             }}
-          >
-            Sair
-          </button>
-
-          <div
-            style={{
-              display: isMobile ? "none" : "flex",
-              alignItems: "center",
-              gap: 10,
-              textAlign: "right",
-              minWidth: 150,
-              justifyContent: "flex-end",
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 800 }}>{usuarioLogado.nome}</div>
-              <div style={{ color: estilos.textoSuave, fontSize: 14 }}>
-                {cargoLabel(usuarioLogado.cargo)}
-              </div>
-            </div>
-            <div style={avatarStyle}>
-              {usuarioLogado.nome?.charAt(0)?.toUpperCase() || "U"}
-            </div>
-          </div>
-        </div>
-
-        {mostrarFerramentas && (
-          <div
-            style={{
-              position: isMobile ? "static" : "absolute",
-              left: 0,
-              right: 0,
-              top: "100%",
-              background: "rgba(15, 23, 42, 0.82)",
-              borderTop: `1px solid ${estilos.borda}`,
-              borderBottom: `1px solid ${estilos.borda}`,
-              boxShadow: "0 24px 55px rgba(13, 71, 161, 0.14)",
-              padding: isMobile ? 14 : "28px 42px",
-              zIndex: 31,
-            }}
-          >
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: isMobile ? "1fr" : "280px 1fr",
-                gap: isMobile ? 16 : 36,
-                maxWidth: 1180,
-                margin: "0 auto",
-              }}
-            >
-              <div style={{ display: "grid", gap: 10, alignContent: "start" }}>
-                <MenuCategoriaBloco
-                  titulo="Consultas"
-                  ativo={categoriaFerramentas === "consultas"}
-                  onClick={() => setCategoriaFerramentas("consultas")}
-                >
-                  {temAcesso(usuarioLogado, "acesso_projetos") && (
-                    <SubmenuAcao
-                      titulo="Projetos"
-                      onClick={() => {
-                        setMostrarFerramentas(false);
-                        window.scrollTo({ top: 360, behavior: "smooth" });
-                      }}
-                    />
-                  )}
-                  {temAcesso(usuarioLogado, "acesso_membros") && (
-                    <SubmenuAcao
-                      titulo="Membros"
-                      onClick={() => {
-                        setMostrarFerramentas(false);
-                        setMostrarMembros(true);
-                        recarregarMembros();
-                      }}
-                    />
-                  )}
-                  {temAcesso(usuarioLogado, "acesso_usuarios") && (
-                    <SubmenuAcao
-                      titulo="Usuários"
-                      onClick={() => {
-                        setMostrarFerramentas(false);
-                        setMostrarUsuarios(true);
-                      }}
-                    />
-                  )}
-                  {temAcesso(usuarioLogado, "acesso_treinamentos") && (
-                    <SubmenuAcao
-                      titulo="Líderes em treinamento"
-                      onClick={() => {
-                        setMostrarFerramentas(false);
-                        setMostrarUsuarios(true);
-                      }}
-                    />
-                  )}
-                </MenuCategoriaBloco>
-
-                <MenuCategoriaBloco
-                  titulo="Serviços"
-                  ativo={categoriaFerramentas === "servicos"}
-                  onClick={() => setCategoriaFerramentas("servicos")}
-                >
-                  {podeCriarProjeto(usuarioLogado) && (
-                    <SubmenuAcao
-                      titulo="Novo projeto"
-                      onClick={() => {
-                        setMostrarFerramentas(false);
-                        limparFormularioProjeto();
-                        setMostrarNovoProjeto(true);
-                      }}
-                    />
-                  )}
-                  {temAcesso(usuarioLogado, "acesso_projetos") && (
-                    <SubmenuAcao
-                      titulo={
-                        mostrarArquivados
-                          ? "Ver projetos ativos"
-                          : "Projetos arquivados"
-                      }
-                      onClick={() => {
-                        setMostrarFerramentas(false);
-                        setMostrarArquivados(!mostrarArquivados);
-                        setSelecionadoId(null);
-                        setRascunho(null);
-                      }}
-                    />
-                  )}
-                  <SubmenuAcao
-                    titulo="Central de ajuda"
-                    onClick={() => {
-                      setMostrarFerramentas(false);
-                      setMostrarCentralAjuda(true);
-                    }}
-                  />
-                </MenuCategoriaBloco>
-
-                <MenuCategoriaBloco
-                  titulo="Relatórios"
-                  ativo={categoriaFerramentas === "relatorios"}
-                  onClick={() => setCategoriaFerramentas("relatorios")}
-                >
-                  <SubmenuAcao
-                    titulo="Painel de relatórios"
-                    onClick={() => {
-                      setMostrarFerramentas(false);
-                      setMostrarRelatorios(true);
-                    }}
-                  />
-                  {temAcesso(usuarioLogado, "acesso_relatorios_projetos") && (
-                    <SubmenuAcao
-                      titulo="Exportar projetos"
-                      onClick={() => {
-                        setMostrarFerramentas(false);
-                        exportarProjetosCSV();
-                      }}
-                    />
-                  )}
-                  {temAcesso(usuarioLogado, "acesso_relatorios_elenco") && (
-                    <SubmenuAcao
-                      titulo="Exportar elenco"
-                      onClick={() => {
-                        setMostrarFerramentas(false);
-                        exportarElencoCSV();
-                      }}
-                    />
-                  )}
-                  {temAcesso(usuarioLogado, "acesso_relatorios_membros") && (
-                    <SubmenuAcao
-                      titulo="Exportar membros"
-                      onClick={() => {
-                        setMostrarFerramentas(false);
-                        exportarMembrosCSV();
-                      }}
-                    />
-                  )}
-                  {temAcesso(
-                    usuarioLogado,
-                    "acesso_relatorios_entrada_saida"
-                  ) && (
-                    <SubmenuAcao
-                      titulo="Entrada e saída"
-                      onClick={() => {
-                        setMostrarFerramentas(false);
-                        exportarRelatorioEntradaSaidaCSV();
-                      }}
-                    />
-                  )}
-                </MenuCategoriaBloco>
-
-                <MenuCategoriaBloco
-                  titulo="Financeiro"
-                  ativo={categoriaFerramentas === "financeiro"}
-                  onClick={() => setCategoriaFerramentas("financeiro")}
-                >
-                  <SubmenuAcao
-                    titulo="Financeiro DubWorks"
-                    onClick={() =>
-                      alert("Área financeira reservada para uma próxima etapa.")
-                    }
-                  />
-                  <SubmenuAcao
-                    titulo="Dashboard financeiro"
-                    onClick={() =>
-                      alert("Dashboard financeiro ainda será desenvolvido.")
-                    }
-                  />
-                </MenuCategoriaBloco>
-              </div>
-
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: isMobile
-                    ? "1fr"
-                    : "repeat(2, minmax(0, 1fr))",
-                  gap: isMobile ? 14 : 24,
-                  alignContent: "start",
-                }}
-              >
-                {categoriaFerramentas === "consultas" && (
-                  <>
-                    {temAcesso(usuarioLogado, "acesso_projetos") && (
-                      <MenuFerramentaItem
-                        titulo="Projetos"
-                        descricao="Voltar para a lista e edição dos projetos ativos."
-                        onClick={() => {
-                          setMostrarFerramentas(false);
-                          window.scrollTo({ top: 360, behavior: "smooth" });
-                        }}
-                      />
-                    )}
-                    {temAcesso(usuarioLogado, "acesso_membros") && (
-                      <MenuFerramentaItem
-                        titulo="Membros"
-                        descricao="Consultar nomes, telefones, status e histórico da comunidade."
-                        onClick={() => {
-                          setMostrarFerramentas(false);
-                          setMostrarMembros(true);
-                          recarregarMembros();
-                        }}
-                      />
-                    )}
-                    {temAcesso(usuarioLogado, "acesso_usuarios") && (
-                      <MenuFerramentaItem
-                        titulo="Usuários"
-                        descricao="Gerenciar acessos, cargos, vínculos e permissões."
-                        onClick={() => {
-                          setMostrarFerramentas(false);
-                          setMostrarUsuarios(true);
-                        }}
-                      />
-                    )}
-                    {temAcesso(usuarioLogado, "acesso_treinamentos") && (
-                      <MenuFerramentaItem
-                        titulo="Líderes em treinamento"
-                        descricao="Acompanhar status e concluir treinamentos de líderes."
-                        onClick={() => {
-                          setMostrarFerramentas(false);
-                          setMostrarUsuarios(true);
-                        }}
-                      />
-                    )}
-                  </>
-                )}
-
-                {categoriaFerramentas === "servicos" && (
-                  <>
-                    {podeCriarProjeto(usuarioLogado) && (
-                      <MenuFerramentaItem
-                        titulo="Novo projeto"
-                        descricao="Cadastrar projeto, líder, editor, status, capa e elenco inicial."
-                        onClick={() => {
-                          setMostrarFerramentas(false);
-                          limparFormularioProjeto();
-                          setMostrarNovoProjeto(true);
-                        }}
-                      />
-                    )}
-                    {temAcesso(usuarioLogado, "acesso_projetos") && (
-                      <MenuFerramentaItem
-                        titulo={
-                          mostrarArquivados
-                            ? "Ver projetos ativos"
-                            : "Projetos arquivados"
-                        }
-                        descricao="Alternar entre a lista de projetos ativos e arquivados."
-                        onClick={() => {
-                          setMostrarFerramentas(false);
-                          setMostrarArquivados(!mostrarArquivados);
-                          setSelecionadoId(null);
-                          setRascunho(null);
-                        }}
-                      />
-                    )}
-                    <MenuFerramentaItem
-                      titulo="Central de ajuda"
-                      descricao="Abrir os atalhos e tutoriais internos do sistema."
-                      onClick={() => {
-                        setMostrarFerramentas(false);
-                        setMostrarCentralAjuda(true);
-                      }}
-                    />
-                  </>
-                )}
-
-                {categoriaFerramentas === "relatorios" && (
-                  <>
-                    <MenuFerramentaItem
-                      titulo="Painel de relatórios"
-                      descricao="Escolher entre relatório de projetos, elenco, membros ou entrada/saída."
-                      onClick={() => {
-                        setMostrarFerramentas(false);
-                        setMostrarRelatorios(true);
-                      }}
-                    />
-                    {temAcesso(usuarioLogado, "acesso_relatorios_projetos") && (
-                      <MenuFerramentaItem
-                        titulo="Relatório de projetos"
-                        descricao="Exportar a lista filtrada de projetos."
-                        onClick={() => {
-                          setMostrarFerramentas(false);
-                          exportarProjetosCSV();
-                        }}
-                      />
-                    )}
-                    {temAcesso(usuarioLogado, "acesso_relatorios_elenco") && (
-                      <MenuFerramentaItem
-                        titulo="Relatório de elenco"
-                        descricao="Exportar personagens, dubladores e ranking."
-                        onClick={() => {
-                          setMostrarFerramentas(false);
-                          exportarElencoCSV();
-                        }}
-                      />
-                    )}
-                    {temAcesso(usuarioLogado, "acesso_relatorios_membros") && (
-                      <MenuFerramentaItem
-                        titulo="Relatório de membros"
-                        descricao="Exportar nomes, telefones, status e observações."
-                        onClick={() => {
-                          setMostrarFerramentas(false);
-                          exportarMembrosCSV();
-                        }}
-                      />
-                    )}
-                    {temAcesso(
-                      usuarioLogado,
-                      "acesso_relatorios_entrada_saida"
-                    ) && (
-                      <MenuFerramentaItem
-                        titulo="Entrada e saída"
-                        descricao="Exportar crescimento mensal da comunidade."
-                        onClick={() => {
-                          setMostrarFerramentas(false);
-                          exportarRelatorioEntradaSaidaCSV();
-                        }}
-                      />
-                    )}
-                  </>
-                )}
-
-                {categoriaFerramentas === "financeiro" && (
-                  <>
-                    <MenuFerramentaItem
-                      titulo="Financeiro DubWorks"
-                      descricao="Área reservada para controle futuro de gastos, TikTok e monetização."
-                      onClick={() =>
-                        alert(
-                          "Área financeira reservada para uma próxima etapa."
-                        )
-                      }
-                    />
-                    <MenuFerramentaItem
-                      titulo="Dashboard financeiro"
-                      descricao="Em breve: receitas, despesas, equipamentos e prestação de contas."
-                      onClick={() =>
-                        alert("Dashboard financeiro ainda será desenvolvido.")
-                      }
-                    />
-                  </>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </header>
-
-      <main style={{ padding: isMobile ? 12 : 24 }}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: isMobile
-              ? "repeat(2, minmax(0, 1fr))"
-              : "repeat(auto-fit, minmax(220px, 1fr))",
-            gap: 16,
-            marginBottom: 18,
-          }}
-        >
-          <ResumoCard
-            titulo="Total de projetos"
-            valor={String(totalProjetos)}
-          />
-          <ResumoCard titulo="Projetos ativos" valor={String(totalAtivos)} />
-          <ResumoCard titulo="Finalizados" valor={String(totalFinalizados)} />
-          <ResumoCard
-            titulo="Registros de elenco"
-            valor={String(totalElenco)}
-          />
-          {podeGerenciarMembros(usuarioLogado) && (
-            <ResumoCard
-              titulo="Membros ativos"
-              valor={String(totalMembrosAtivos)}
-            />
-          )}
-          {podeGerenciarTreinamentos(usuarioLogado) && (
-            <ResumoCard
-              titulo="Líderes em treinamento"
-              valor={String(totalTreinamento)}
-            />
-          )}
-        </div>
-
-        <div
-          style={{
-            ...cardStyle,
-            marginBottom: 18,
-            display: "grid",
-            gridTemplateColumns: isMobile
-              ? "1fr"
-              : isTablet
-              ? "1fr 1fr"
-              : "1.4fr 220px 170px 170px 170px",
-            gap: 12,
-            alignItems: "center",
-          }}
-        >
-          <input
-            placeholder="Buscar por ID, projeto, líder, editor, gênero, personagem..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            style={inputStyle}
-          />
-
-          <select
-            value={statusFiltro}
-            onChange={(e) => setStatusFiltro(e.target.value)}
-            style={inputStyle}
-          >
-            <option>Todos</option>
-            {statusUnicos.map((status, i) => (
-              <option key={i}>{status}</option>
-            ))}
-          </select>
-
-          <button
-            onClick={() => {
-              const novoValor = !mostrarArquivados;
-              setMostrarArquivados(novoValor);
-              setSelecionadoId(null);
-              setRascunho(null);
-            }}
-            style={botaoSecundarioGrandeStyle}
-          >
-            {mostrarArquivados ? "Ver ativos" : "Arquivados"}
-          </button>
-
-          <button
-            onClick={exportarProjetosCSV}
-            style={botaoSecundarioGrandeStyle}
-          >
-            Relatório
-          </button>
-
-          <button
-            onClick={recarregarProjetos}
-            style={botaoSecundarioGrandeStyle}
+            style={botaoSecundarioStyle}
           >
             Atualizar
           </button>
         </div>
+      </div>
 
+      <div
+        style={{
+          ...painelDarkStyle,
+          display: "grid",
+          gridTemplateColumns: isMobile ? "1fr" : "1fr 220px",
+          gap: 12,
+          padding: 14,
+        }}
+      >
+        <input
+          placeholder="Buscar por ID, projeto, líder, editor, gênero ou personagem..."
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          style={inputStyle}
+        />
+        <select
+          value={statusFiltro}
+          onChange={(e) => setStatusFiltro(e.target.value)}
+          style={inputStyle}
+        >
+          <option>Todos</option>
+          {statusUnicos.map((status, i) => (
+            <option key={`${status}-${i}`}>{status}</option>
+          ))}
+        </select>
+      </div>
+
+      {!projetoPainel && ProjectList()}
+
+      {!projetoPainel && (
+        <div style={painelDarkStyle}>
+          <h2 style={tituloCardDarkStyle}>Selecione um projeto</h2>
+          <p style={{ color: "#94a3b8" }}>
+            Clique em um projeto da lista acima para abrir a visualização.
+          </p>
+        </div>
+      )}
+
+      <div style={tabsDarkStyle}>
+        {[
+          ["informacoes", "ⓘ Informações"],
+          ["elenco", "👥 Elenco"],
+          ["registros", "▣ Registros Semanais"],
+          ["drive", "📁 Arquivos do Drive"],
+          ["atividades", "↔ Atividades"],
+          ["historico", "◷ Histórico"],
+        ].map(([id, label]) => (
+          <button
+            key={id}
+            onClick={() => setAbaProjeto(id as any)}
+            style={{
+              ...tabButtonDarkStyle,
+              background:
+                abaProjeto === id ? "rgba(37,99,235,0.22)" : "transparent",
+              color: abaProjeto === id ? "#38bdf8" : "#cbd5e1",
+              borderBottom:
+                abaProjeto === id
+                  ? "2px solid #38bdf8"
+                  : "2px solid transparent",
+            }}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {abaProjeto === "informacoes" && (
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: isTablet ? "1fr" : "1.45fr 1fr",
-            gap: 20,
-            alignItems: "start",
+            gridTemplateColumns: isMobile ? "1fr" : "1fr 0.95fr",
+            gap: 18,
           }}
         >
-          <div style={{ ...cardStyle, padding: 0, overflow: "hidden" }}>
-            <div
-              style={{
-                padding: "16px 18px",
-                borderBottom: `1px solid ${estilos.borda}`,
-                background:
-                  "linear-gradient(180deg, rgba(15,23,42,0.78), #f1f6ff)",
-                fontWeight: 800,
-                color: estilos.azulEscuro,
-                fontSize: 20,
-              }}
-            >
-              {mostrarArquivados ? "Projetos arquivados" : "Projetos ativos"}{" "}
-              {carregando ? "• carregando..." : ""}
-            </div>
-
-            <div style={{ overflowX: "auto" }}>
-              <table
+          <div style={{ display: "grid", gap: 18 }}>
+            {ProjectDetails()}
+            <div style={painelDarkStyle}>
+              <h2 style={tituloCardDarkStyle}>▣ Observações</h2>
+              <div
                 style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  minWidth: 980,
+                  background: "rgba(2,6,23,0.56)",
+                  border: "1px solid rgba(148,163,184,0.14)",
+                  borderRadius: 12,
+                  minHeight: 84,
+                  padding: 14,
+                  color: "#f8fafc",
+                  whiteSpace: "pre-wrap",
                 }}
               >
-                <thead>
-                  <tr
-                    style={{
-                      textAlign: "left",
-                      background: "rgba(15, 23, 42, 0.62)",
-                    }}
-                  >
-                    <th style={thStyle}>ID</th>
-                    <th style={thStyle}>Projeto</th>
-                    <th style={thStyle}>Tipo</th>
-                    <th style={thStyle}>Gênero</th>
-                    <th style={thStyle}>Prioridade</th>
-                    <th style={thStyle}>Status</th>
-                    <th style={thStyle}>Líder</th>
-                    <th style={thStyle}>Editor</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filtrados.map((p) => {
-                    const ativo = p.ID === selecionadoId;
-                    const statusCor = corStatus(p.Status);
-
-                    return (
-                      <tr
-                        key={p.ID}
-                        onClick={() => setSelecionadoId(p.ID)}
-                        style={{
-                          cursor: "pointer",
-                          background: ativo
-                            ? "rgba(56,189,248,0.14)"
-                            : "rgba(15,23,42,0.96)",
-                          borderTop: `1px solid ${estilos.borda}`,
-                        }}
-                      >
-                        <td style={tdStyle}>{p.ID}</td>
-                        <td style={tdStyle}>
-                          <div style={{ fontWeight: 700 }}>{p.Projeto}</div>
-                          <div
-                            style={{ color: estilos.textoSuave, fontSize: 13 }}
-                          >
-                            {p.Elenco.length} registro(s) de elenco
-                          </div>
-                        </td>
-                        <td style={tdStyle}>{p.Tipo}</td>
-                        <td style={tdStyle}>{p.Genero}</td>
-                        <td style={tdStyle}>{p.Prioridade}</td>
-                        <td style={tdStyle}>
-                          <span
-                            style={{
-                              display: "inline-block",
-                              padding: "7px 12px",
-                              borderRadius: 999,
-                              background: statusCor.bg,
-                              color: statusCor.color,
-                              fontWeight: 700,
-                              fontSize: 13,
-                            }}
-                          >
-                            {p.Status}
-                          </span>
-                        </td>
-                        <td style={tdStyle}>{p.Lider}</td>
-                        <td style={tdStyle}>{p.Editor}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                {projetoPainel?.Observacoes || "Sem observações cadastradas."}
+              </div>
             </div>
           </div>
+          {DrivePanel()}
+        </div>
+      )}
 
-          <div style={{ display: "grid", gap: 18 }}>
-            <div style={{ ...cardStyle, minHeight: 460 }}>
-              {!rascunho ? (
-                <div style={{ color: estilos.textoSuave, fontSize: 17 }}>
-                  Selecione um projeto para ver e editar.
-                </div>
-              ) : (
-                <>
-                  {rascunho.Capa_URL ? (
-                    <img
-                      src={rascunho.Capa_URL}
-                      alt={`Capa do projeto ${rascunho.Projeto}`}
-                      style={{
-                        width: "100%",
-                        height: 190,
-                        objectFit: "cover",
-                        borderRadius: 18,
-                        border: `1px solid ${estilos.borda}`,
-                        marginBottom: 16,
-                        background: "rgba(59, 130, 246, 0.16)",
-                      }}
-                    />
-                  ) : (
-                    <div
-                      style={{
-                        width: "100%",
-                        height: 150,
-                        borderRadius: 18,
-                        border: `1px solid ${estilos.borda}`,
-                        marginBottom: 16,
-                        background: "linear-gradient(135deg, #dbeafe, #1366d9)",
-                        color: "rgba(15,23,42,0.96)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        fontWeight: 800,
-                        fontSize: 22,
-                        textAlign: "center",
-                        padding: 18,
-                      }}
-                    >
-                      {rascunho.Projeto || "DubWorks"}
-                    </div>
-                  )}
+      {abaProjeto === "elenco" && (
+        <div style={painelDarkStyle}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <h2 style={tituloCardDarkStyle}>
+                Elenco e vídeos por personagem
+              </h2>
 
-                  <div
-                    style={{
-                      paddingBottom: 14,
-                      marginBottom: 18,
-                      borderBottom: `1px solid ${estilos.borda}`,
-                    }}
-                  >
-                    <h2
-                      style={{
-                        margin: 0,
-                        fontSize: 30,
-                        color: estilos.azulEscuro,
-                      }}
-                    >
-                      {rascunho.Projeto || "Projeto"}
-                    </h2>
-                    <div style={{ marginTop: 8, color: estilos.textoSuave }}>
-                      ID: {rascunho.ID}
+              <p style={{ color: "#94a3b8" }}>
+                Nesta área vamos guardar um link de vídeo/teste para cada
+                personagem.
+              </p>
+            </div>
+
+            {rascunho && podeEditarProjeto(usuarioLogado, projetoPainel) && (
+              <button
+                type="button"
+                onClick={adicionarElencoRascunho}
+                style={{
+                  background: "linear-gradient(135deg,#3b82f6,#2563eb)",
+                  border: "none",
+                  color: "#fff",
+                  borderRadius: 14,
+                  padding: "12px 18px",
+                  cursor: "pointer",
+                  fontWeight: 800,
+                  boxShadow: "0 0 25px rgba(37,99,235,.35)",
+                }}
+              >
+                + Adicionar personagem
+              </button>
+            )}
+          </div>
+          <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
+            {((rascunho || projetoPainel)?.Elenco || []).length ? (
+              (rascunho || projetoPainel)!.Elenco.map((item, index) => (
+                <div
+                  key={item.id || index}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1.4fr",
+                    gap: 12,
+                    alignItems: "center",
+                    background: "rgba(2,6,23,0.48)",
+                    border: "1px solid rgba(148,163,184,0.12)",
+                    borderRadius: 14,
+                    padding: 14,
+                  }}
+                >
+                  <div>
+                    <div style={{ color: "#94a3b8", fontSize: 12 }}>
+                      Personagem
                     </div>
-                    <div style={{ marginTop: 6 }}>
-                      <strong>Líder:</strong> {rascunho.Lider || "-"}
-                    </div>
+                    {rascunho &&
+                    podeEditarProjeto(usuarioLogado, projetoPainel) ? (
+                      <input
+                        value={item.personagem || ""}
+                        onChange={(e) =>
+                          atualizarElencoRascunho(
+                            index,
+                            "personagem",
+                            e.target.value
+                          )
+                        }
+                        placeholder="Nome do personagem"
+                        style={inputStyle}
+                      />
+                    ) : (
+                      <div style={{ color: "#f8fafc", fontWeight: 900 }}>
+                        {item.personagem || "-"}
+                      </div>
+                    )}
                   </div>
-
-                  <InfoPermissao
-                    podeEditar={podeEditarProjeto(usuarioLogado, selecionado)}
-                    podeVideo={podeSubirVideoEditor(usuarioLogado, selecionado)}
+                  <div>
+                    <div style={{ color: "#94a3b8", fontSize: 12 }}>
+                      Dublador
+                    </div>
+                    {rascunho &&
+                    podeEditarProjeto(usuarioLogado, projetoPainel) ? (
+                      <input
+                        value={item.dublador || ""}
+                        onChange={(e) =>
+                          atualizarElencoRascunho(
+                            index,
+                            "dublador",
+                            e.target.value
+                          )
+                        }
+                        placeholder="Nome do dublador"
+                        style={inputStyle}
+                      />
+                    ) : (
+                      <div style={{ color: "#f8fafc", fontWeight: 900 }}>
+                        {item.dublador || "-"}
+                      </div>
+                    )}
+                  </div>
+                  <input
+                    placeholder="Link do vídeo/teste deste personagem"
+                    value={(item as any).video_link || ""}
+                    readOnly
+                    style={inputStyle}
                   />
 
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-                      gap: 12,
-                    }}
-                  >
-                    <Campo
-                      label="Projeto"
-                      value={rascunho.Projeto}
-                      onChange={(v) => atualizarCampo("Projeto", v)}
-                      disabled={!podeEditarProjeto(usuarioLogado, selecionado)}
-                    />
-                    <Campo
-                      label="Tipo"
-                      value={rascunho.Tipo}
-                      onChange={(v) => atualizarCampo("Tipo", v)}
-                      disabled={!podeEditarProjeto(usuarioLogado, selecionado)}
-                    />
-                    <Campo
-                      label="Gênero"
-                      value={rascunho.Genero}
-                      onChange={(v) => atualizarCampo("Genero", v)}
-                      disabled={!podeEditarProjeto(usuarioLogado, selecionado)}
-                    />
-                    <Campo
-                      label="Prioridade"
-                      value={rascunho.Prioridade}
-                      onChange={(v) => atualizarCampo("Prioridade", v)}
-                      disabled={!podeEditarProjeto(usuarioLogado, selecionado)}
-                    />
-                    <Campo
-                      label="Dupla"
-                      value={rascunho.Dupla}
-                      onChange={(v) => atualizarCampo("Dupla", v)}
-                      disabled={!podeEditarProjeto(usuarioLogado, selecionado)}
-                    />
-                    <Campo
-                      label="Status"
-                      value={rascunho.Status}
-                      onChange={(v) => atualizarCampo("Status", v)}
-                      disabled={!podeEditarProjeto(usuarioLogado, selecionado)}
-                    />
-                    <Campo
-                      label="Líder"
-                      value={rascunho.Lider}
-                      onChange={(v) => atualizarCampo("Lider", v)}
-                      disabled={
-                        ["diretoria", "adm"].indexOf(usuarioLogado.cargo) === -1
-                      }
-                    />
-                    <Campo
-                      label="Telefone do líder"
-                      value={rascunho.Telefone_Lider}
-                      onChange={(v) => atualizarCampo("Telefone_Lider", v)}
-                      disabled={!podeEditarProjeto(usuarioLogado, selecionado)}
-                    />
-                    <Campo
-                      label="Editor"
-                      value={rascunho.Editor}
-                      onChange={(v) => atualizarCampo("Editor", v)}
-                      disabled={
-                        ["diretoria", "adm"].indexOf(usuarioLogado.cargo) === -1
-                      }
-                    />
-                    <Campo
-                      label="Telefone do editor"
-                      value={rascunho.Telefone_Editor}
-                      onChange={(v) => atualizarCampo("Telefone_Editor", v)}
-                      disabled={!podeEditarProjeto(usuarioLogado, selecionado)}
-                    />
-                    <Campo
-                      label="Data de início"
-                      value={rascunho.Data_Inicio}
-                      onChange={(v) => atualizarCampo("Data_Inicio", v)}
-                      disabled={!podeEditarProjeto(usuarioLogado, selecionado)}
-                    />
-                    <div style={{ gridColumn: "1 / -1" }}>
-                      <Campo
-                        label="Link da capa do projeto"
-                        value={rascunho.Capa_URL}
-                        onChange={(v) => atualizarCampo("Capa_URL", v)}
-                        disabled={
-                          !podeEditarProjeto(usuarioLogado, selecionado)
-                        }
-                      />
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: 14 }}>
-                    <label style={labelStyle}>Registro semanal do líder</label>
-                    <textarea
-                      value={rascunho.Registro_Semanal}
-                      onChange={(e) =>
-                        atualizarCampo("Registro_Semanal", e.target.value)
-                      }
-                      disabled={!podeEditarProjeto(usuarioLogado, selecionado)}
-                      rows={4}
-                      style={{
-                        ...textareaStyle,
-                        background: podeEditarProjeto(
-                          usuarioLogado,
-                          selecionado
-                        )
-                          ? "rgba(15,23,42,0.96)"
-                          : "#f4f6f8",
-                      }}
-                    />
-                  </div>
-
-                  <div style={{ marginTop: 14 }}>
-                    <label style={labelStyle}>Link do vídeo do editor</label>
-                    <input
-                      value={rascunho.Video_Editor_Link}
-                      onChange={(e) =>
-                        atualizarCampo("Video_Editor_Link", e.target.value)
-                      }
-                      disabled={
-                        !podeSubirVideoEditor(usuarioLogado, selecionado)
-                      }
-                      style={{
-                        ...inputStyle,
-                        background: podeSubirVideoEditor(
-                          usuarioLogado,
-                          selecionado
-                        )
-                          ? "rgba(15,23,42,0.96)"
-                          : "#f4f6f8",
-                      }}
-                    />
-                  </div>
-
-                  <div style={{ marginTop: 14 }}>
-                    <label style={labelStyle}>Observações</label>
-                    <textarea
-                      value={rascunho.Observacoes}
-                      onChange={(e) =>
-                        atualizarCampo("Observacoes", e.target.value)
-                      }
-                      disabled={
-                        !podeEditarProjeto(usuarioLogado, selecionado) &&
-                        !podeSubirVideoEditor(usuarioLogado, selecionado)
-                      }
-                      rows={4}
-                      style={{
-                        ...textareaStyle,
-                        background:
-                          podeEditarProjeto(usuarioLogado, selecionado) ||
-                          podeSubirVideoEditor(usuarioLogado, selecionado)
-                            ? "rgba(15,23,42,0.96)"
-                            : "#f4f6f8",
-                      }}
-                    />
-                  </div>
-
-                  <button
-                    onClick={salvarAlteracoes}
-                    disabled={
-                      !podeEditarProjeto(usuarioLogado, selecionado) &&
-                      !podeSubirVideoEditor(usuarioLogado, selecionado)
-                    }
-                    style={{
-                      ...botaoPrimarioStyleGrande,
-                      marginTop: 16,
-                      opacity:
-                        !podeEditarProjeto(usuarioLogado, selecionado) &&
-                        !podeSubirVideoEditor(usuarioLogado, selecionado)
-                          ? 0.6
-                          : 1,
-                    }}
-                  >
-                    Salvar alterações
-                  </button>
-
-                  {usuarioLogado.cargo === "diretoria" && (
-                    <button
-                      onClick={() =>
-                        alterarArquivamentoProjeto(!mostrarArquivados)
-                      }
-                      style={{
-                        ...botaoSecundarioGrandeStyle,
-                        marginTop: 10,
-                        width: "100%",
-                        color: mostrarArquivados ? "#087443" : "#c2410c",
-                      }}
-                    >
-                      {mostrarArquivados
-                        ? "Reativar projeto"
-                        : "Arquivar projeto"}
-                    </button>
-                  )}
-                </>
-              )}
-            </div>
-
-            <div style={cardStyle}>
-              <div style={secaoTituloStyle}>Elenco do projeto</div>
-
-              {!rascunho ? (
-                <div style={{ color: estilos.textoSuave }}>
-                  Selecione um projeto.
-                </div>
-              ) : (
-                <>
-                  {podeEditarProjeto(usuarioLogado, selecionado) && (
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: isMobile
-                          ? "1fr"
-                          : "1fr 1fr 1fr auto",
-                        gap: 10,
-                        marginBottom: 14,
-                      }}
-                    >
-                      <input
-                        placeholder="Personagem"
-                        value={novoElencoRascunho.personagem}
-                        onChange={(e) =>
-                          setNovoElencoRascunho({
-                            ...novoElencoRascunho,
-                            personagem: e.target.value,
-                          })
-                        }
-                        style={inputStyle}
-                      />
-                      <input
-                        placeholder="Dublador"
-                        value={novoElencoRascunho.dublador}
-                        onChange={(e) =>
-                          setNovoElencoRascunho({
-                            ...novoElencoRascunho,
-                            dublador: e.target.value,
-                          })
-                        }
-                        style={inputStyle}
-                      />
-                      <input
-                        placeholder="Função"
-                        value={novoElencoRascunho.funcao}
-                        onChange={(e) =>
-                          setNovoElencoRascunho({
-                            ...novoElencoRascunho,
-                            funcao: e.target.value,
-                          })
-                        }
-                        style={inputStyle}
-                      />
+                  {rascunho &&
+                    podeEditarProjeto(usuarioLogado, projetoPainel) && (
                       <button
-                        onClick={adicionarElencoRascunho}
-                        style={botaoPrimarioStyle}
-                      >
-                        Adicionar
-                      </button>
-                    </div>
-                  )}
-
-                  {rascunho.Elenco.length === 0 ? (
-                    <div style={{ color: estilos.textoSuave }}>
-                      Nenhum personagem registrado ainda.
-                    </div>
-                  ) : (
-                    <div style={{ display: "grid", gap: 10 }}>
-                      {rascunho.Elenco.map((item) => {
-                        const ranking = rankingDubladores.find(
-                          (r) =>
-                            normalizar(r.nome) === normalizar(item.dublador)
-                        );
-                        return (
-                          <div
-                            key={item.id}
-                            style={{
-                              border: `1px solid ${estilos.borda}`,
-                              borderRadius: 16,
-                              padding: 14,
-                              background: "#fbfdff",
-                              display: "flex",
-                              justifyContent: "space-between",
-                              gap: 14,
-                              alignItems: "center",
-                            }}
-                          >
-                            <div>
-                              <div style={{ fontWeight: 800 }}>
-                                {item.personagem}
-                              </div>
-                              <div style={{ marginTop: 4 }}>
-                                <strong>Dublador:</strong> {item.dublador}
-                              </div>
-                              <div
-                                style={{
-                                  color: estilos.textoSuave,
-                                  marginTop: 4,
-                                }}
-                              >
-                                {item.funcao || "Sem função informada"}
-                              </div>
-                              <div
-                                style={{
-                                  marginTop: 8,
-                                  display: "inline-block",
-                                  background: "rgba(37,99,235,0.20)",
-                                  color: estilos.azulEscuro,
-                                  padding: "6px 10px",
-                                  borderRadius: 999,
-                                  fontWeight: 700,
-                                  fontSize: 12,
-                                }}
-                              >
-                                {ranking?.totalProjetos || 0} projeto(s) •{" "}
-                                {ranking?.totalPapeis || 0} papel(is)
-                              </div>
-                            </div>
-                            {podeEditarProjeto(usuarioLogado, selecionado) && (
-                              <button
-                                onClick={() => removerElencoRascunho(item.id)}
-                                style={botaoSecundarioStyle}
-                              >
-                                Remover
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-
-            <div style={cardStyle}>
-              <div style={secaoTituloStyle}>Top dubladores</div>
-              {rankingDubladores.length === 0 ? (
-                <div style={{ color: estilos.textoSuave }}>
-                  Ainda não há registros suficientes.
-                </div>
-              ) : (
-                <div style={{ display: "grid", gap: 10 }}>
-                  {rankingDubladores.slice(0, 8).map((item, idx) => (
-                    <div
-                      key={item.nome + idx}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "12px 14px",
-                        borderRadius: 14,
-                        background:
-                          idx === 0 ? "#edf4ff" : "rgba(15,23,42,0.78)",
-                        border: `1px solid ${estilos.borda}`,
-                      }}
-                    >
-                      <div style={{ fontWeight: 700 }}>
-                        {idx + 1}. {item.nome}
-                      </div>
-                      <div
+                        type="button"
+                        onClick={() => excluirElencoRascunho(item, index)}
                         style={{
-                          background: estilos.azul,
-                          color: "rgba(15,23,42,0.96)",
-                          borderRadius: 999,
-                          padding: "6px 10px",
-                          fontWeight: 700,
-                          fontSize: 13,
+                          marginTop: 10,
+                          background: "rgba(220,38,38,0.15)",
+                          border: "1px solid rgba(248,113,113,0.28)",
+                          color: "#fca5a5",
+                          borderRadius: 12,
+                          padding: "10px 14px",
+                          cursor: "pointer",
+                          fontWeight: 800,
                         }}
                       >
-                        {item.totalProjetos} proj. / {item.totalPapeis} papéis
-                      </div>
-                    </div>
-                  ))}
+                        Remover personagem
+                      </button>
+                    )}
+                </div>
+              ))
+            ) : (
+              <div style={{ color: "#94a3b8" }}>
+                Nenhum elenco cadastrado neste projeto.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {abaProjeto === "drive" && <DrivePanel />}
+
+      {abaProjeto === "registros" &&
+        (projetoPainel ? (
+          <div style={painelDarkStyle}>
+            <h2 style={tituloCardDarkStyle}>
+              ▣ Registros Semanais — {projetoPainel.Projeto}
+            </h2>
+            <p style={{ color: "#94a3b8", marginTop: 8 }}>
+              Cada registro salvo recebe automaticamente nome, data e hora.
+            </p>
+
+            {(podeEditarProjeto(usuarioLogado, projetoPainel) ||
+              usuarioLogado?.cargo === "diretoria" ||
+              usuarioLogado?.cargo === "adm") && (
+              <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
+                <textarea
+                  placeholder="Escreva o registro semanal do projeto..."
+                  value={registroSemanalTexto}
+                  onChange={(e) => setRegistroSemanalTexto(e.target.value)}
+                  style={{ ...textareaStyle, minHeight: 110 }}
+                />
+                <button
+                  onClick={salvarRegistroSemanalProjeto}
+                  style={botaoPrimarioStyle}
+                >
+                  Salvar registro semanal
+                </button>
+              </div>
+            )}
+
+            <div
+              style={{
+                marginTop: 22,
+                background: "rgba(2,6,23,0.54)",
+                border: "1px solid rgba(148,163,184,0.14)",
+                borderRadius: 14,
+                padding: 16,
+                color: "#cbd5e1",
+                whiteSpace: "pre-wrap",
+                lineHeight: 1.6,
+              }}
+            >
+              {projetoPainel.Registro_Semanal ||
+                "Nenhum registro semanal cadastrado."}
+            </div>
+          </div>
+        ) : (
+          <div style={painelDarkStyle}>
+            <h2 style={tituloCardDarkStyle}>▣ Registros Semanais</h2>
+            <p style={{ color: "#94a3b8" }}>
+              Selecione um projeto para incluir ou visualizar registros.
+            </p>
+          </div>
+        ))}
+
+      {abaProjeto === "atividades" && (
+        <div style={painelDarkStyle}>
+          <h2 style={tituloCardDarkStyle}>
+            🔔 Central de Notificações da Diretoria
+          </h2>
+          <p style={{ color: "#94a3b8", marginTop: 8 }}>
+            Estas notificações futuramente serão geradas automaticamente com
+            base nas ações dos usuários dentro do sistema.
+          </p>
+          <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
+            {notificacoesDiretoriaDemo.map((item, index) => (
+              <div
+                key={`${item.usuario}-${index}`}
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "1fr auto",
+                  gap: 10,
+                  background: "rgba(2,6,23,0.54)",
+                  border: "1px solid rgba(56,189,248,0.14)",
+                  borderRadius: 14,
+                  padding: 14,
+                }}
+              >
+                <div>
+                  <strong style={{ color: "#f8fafc" }}>{item.usuario}</strong>
+                  <span style={{ color: "#cbd5e1" }}> - {item.acao}</span>
+                  <div style={{ color: "#94a3b8", fontSize: 12, marginTop: 4 }}>
+                    {item.tipo}
+                  </div>
+                </div>
+                <div style={{ color: "#94a3b8", fontSize: 13 }}>
+                  {item.data}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {abaProjeto === "historico" &&
+        (projetoPainel ? (
+          <div style={painelDarkStyle}>
+            <h2 style={tituloCardDarkStyle}>
+              ◷ Histórico de Alterações — {projetoPainel.Projeto}
+            </h2>
+            <p style={{ color: "#94a3b8", marginTop: 8 }}>
+              Histórico vinculado a este projeto. Na próxima etapa, esses
+              registros serão gravados automaticamente no Supabase por ID do
+              projeto.
+            </p>
+            <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
+              {(projetoPainel.Registro_Semanal
+                ? projetoPainel.Registro_Semanal.split("\n\n").filter(Boolean)
+                : []
+              ).map((item, index) => (
+                <div
+                  key={`${projetoPainel.ID}-historico-${index}`}
+                  style={{
+                    background: "rgba(2,6,23,0.54)",
+                    border: "1px solid rgba(148,163,184,0.14)",
+                    borderRadius: 14,
+                    padding: 14,
+                    color: "#cbd5e1",
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {item}
+                </div>
+              ))}
+              {!projetoPainel.Registro_Semanal && (
+                <div style={{ color: "#94a3b8" }}>
+                  Nenhum histórico salvo para este projeto ainda.
                 </div>
               )}
             </div>
           </div>
+        ) : (
+          <div style={painelDarkStyle}>
+            <h2 style={tituloCardDarkStyle}>◷ Histórico de Alterações</h2>
+            <p style={{ color: "#94a3b8" }}>
+              Selecione um projeto para visualizar o histórico dele.
+            </p>
+          </div>
+        ))}
+
+      {projetoPainel && ProjectList()}
+
+      <div style={painelDarkStyle}>
+        <h2 style={tituloCardDarkStyle}>Estatísticas do Projeto</h2>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isMobile ? "1fr" : "repeat(5, 1fr)",
+            gap: 14,
+            marginTop: 18,
+          }}
+        >
+          <MiniStat
+            icon="👥"
+            value={String(projetoPainel?.Elenco.length || 0)}
+            label="Membros no Elenco"
+            color="#3b82f6"
+          />
+          <MiniStat
+            icon="🎙️"
+            value={String(projetoPainel?.Elenco.length || 0)}
+            label="Vídeos/Testes"
+            color="#8b5cf6"
+          />
+          <MiniStat
+            icon="🎬"
+            value={
+              projetoPainel?.Status?.toLowerCase().includes("final")
+                ? "01"
+                : "00"
+            }
+            label="Episódios Finalizados"
+            color="#22c55e"
+          />
+          <MiniStat
+            icon="🕒"
+            value={projetoPainel?.Registro_Semanal ? "01" : "00"}
+            label="Registros Semanais"
+            color="#f97316"
+          />
+          <MiniStat
+            icon="📈"
+            value="85%"
+            label="Progresso Geral"
+            color="#14b8a6"
+          />
         </div>
+      </div>
+    </div>
+  );
+
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        background:
+          "radial-gradient(circle at 18% 0%, rgba(37,99,235,0.16), transparent 30%), radial-gradient(circle at 95% 12%, rgba(14,165,233,0.08), transparent 32%), #050816",
+        color: "#f8fafc",
+        fontFamily: "Arial, sans-serif",
+        display: "flex",
+        flexDirection: isMobile ? "column" : "row",
+      }}
+    >
+      <style>{estilosAnimacao}</style>
+
+      <aside
+        style={{
+          width: isMobile ? "100%" : 250,
+          minHeight: isMobile ? "auto" : "100vh",
+          position: isMobile ? "relative" : "sticky",
+          top: 0,
+          alignSelf: "flex-start",
+          background:
+            "linear-gradient(180deg, rgba(2,6,23,0.98), rgba(15,23,42,0.94))",
+          borderRight: isMobile ? "none" : "1px solid rgba(148,163,184,0.16)",
+          borderBottom: isMobile ? "1px solid rgba(148,163,184,0.16)" : "none",
+          display: "flex",
+          flexDirection: isMobile ? "row" : "column",
+          alignItems: isMobile ? "center" : "stretch",
+          overflowX: isMobile ? "auto" : "visible",
+          padding: isMobile ? "12px 10px" : "28px 16px",
+          gap: isMobile ? 10 : 22,
+        }}
+      >
+        <div style={{ padding: isMobile ? 0 : "0 10px" }}>
+          <img
+            src={LOGO_URL}
+            alt="DubWorks"
+            style={{
+              width: isMobile ? 58 : 150,
+              height: "auto",
+              filter: "drop-shadow(0 0 18px rgba(56,189,248,0.18))",
+            }}
+          />
+          {!isMobile && (
+            <div
+              style={{
+                color: "#38bdf8",
+                fontWeight: 900,
+                letterSpacing: 3,
+                fontSize: 11,
+                marginLeft: 58,
+                marginTop: -8,
+              }}
+            >
+              MANAGER
+            </div>
+          )}
+        </div>
+
+        <nav
+          style={{
+            display: isMobile ? "flex" : "grid",
+            gap: 8,
+            flex: isMobile ? 1 : undefined,
+            overflowX: isMobile ? "auto" : "visible",
+          }}
+        >
+          {!isMobile && <div style={sideSectionDarkStyle}>MENU</div>}
+          <SidebarItem
+            id="projetos"
+            label={isMobile ? "" : "Projetos"}
+            icon="▣"
+            onClick={() => {
+              setMostrarMembros(false);
+              setMostrarUsuarios(false);
+              setMostrarRelatorios(false);
+              setMostrarFormNovoUsuario(false);
+            }}
+          />
+          {temAcesso(usuarioLogado, "acesso_membros") && (
+            <SidebarItem
+              id="membros"
+              label={isMobile ? "" : "Membros"}
+              icon="👥"
+              onClick={() => {
+                setMostrarMembros(true);
+                setMostrarUsuarios(false);
+                setMostrarRelatorios(false);
+                setMostrarFormNovoUsuario(false);
+                recarregarMembros();
+              }}
+            />
+          )}
+          {temAcesso(usuarioLogado, "acesso_usuarios") && (
+            <SidebarItem
+              id="usuarios"
+              label={isMobile ? "" : "Usuários"}
+              icon="♙"
+              onClick={() => {
+                setMostrarUsuarios(true);
+                setMostrarMembros(false);
+                setMostrarRelatorios(false);
+              }}
+            />
+          )}
+          <SidebarItem
+            id="relatorios"
+            label={isMobile ? "" : "Relatórios"}
+            icon="▥"
+            onClick={() => {
+              setMostrarRelatorios(true);
+              setMostrarMembros(false);
+              setMostrarUsuarios(false);
+              setMostrarFormNovoUsuario(false);
+            }}
+          />
+          {!isMobile && (
+            <SidebarItem
+              id="treinamentos"
+              label="Treinamentos"
+              icon="◇"
+              onClick={() =>
+                alert("Treinamentos entra na próxima etapa do painel.")
+              }
+            />
+          )}
+        </nav>
+
+        <div style={{ marginTop: "auto", display: "grid", gap: 8 }}>
+          {!isMobile && <div style={sideSectionDarkStyle}>CONFIGURAÇÕES</div>}
+          {!isMobile && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "12px 10px",
+                color: "#cbd5e1",
+              }}
+            >
+              <div style={{ ...avatarStyle, width: 44, height: 44 }}>
+                {usuarioLogado.nome?.charAt(0)?.toUpperCase() || "U"}
+              </div>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 900, color: "#f8fafc" }}>
+                  {usuarioLogado.nome}
+                </div>
+                <div style={{ color: "#94a3b8", fontSize: 13 }}>
+                  {cargoLabel(usuarioLogado.cargo)}
+                </div>
+              </div>
+            </div>
+          )}
+          <button
+            onClick={sair}
+            style={{ ...menuTopoStyle, textAlign: "left" }}
+          >
+            {isMobile ? "⇢" : "⇢  Sair"}
+          </button>
+        </div>
+      </aside>
+
+      <main style={{ flex: 1, padding: isMobile ? 14 : 26, minWidth: 0 }}>
+        {telaAtual === "membros"
+          ? MembersPage()
+          : telaAtual === "usuarios"
+          ? UsersPage()
+          : telaAtual === "relatorios"
+          ? ReportsPage()
+          : ProjectsPage()}
       </main>
 
       {mostrarNovoProjeto && (
         <Modal
           titulo="Novo projeto"
-          onClose={() => setMostrarNovoProjeto(false)}
-        >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-              gap: 12,
-            }}
-          >
-            <Campo
-              label="Projeto"
-              value={novoProjeto.Projeto}
-              onChange={(v) => setNovoProjeto({ ...novoProjeto, Projeto: v })}
-            />
-            <Campo
-              label="Tipo"
-              value={novoProjeto.Tipo}
-              onChange={(v) => setNovoProjeto({ ...novoProjeto, Tipo: v })}
-            />
-            <Campo
-              label="Gênero"
-              value={novoProjeto.Genero}
-              onChange={(v) => setNovoProjeto({ ...novoProjeto, Genero: v })}
-            />
-            <Campo
-              label="Prioridade"
-              value={novoProjeto.Prioridade}
-              onChange={(v) =>
-                setNovoProjeto({ ...novoProjeto, Prioridade: v })
-              }
-            />
-            <Campo
-              label="Dupla"
-              value={novoProjeto.Dupla}
-              onChange={(v) => setNovoProjeto({ ...novoProjeto, Dupla: v })}
-            />
-            <Campo
-              label="Líder"
-              value={novoProjeto.Lider}
-              onChange={(v) => setNovoProjeto({ ...novoProjeto, Lider: v })}
-              disabled={
-                usuarioLogado.cargo === "lider" ||
-                usuarioLogado.cargo === "lider_treinamento"
-              }
-            />
-            <Campo
-              label="Telefone do líder"
-              value={novoProjeto.Telefone_Lider}
-              onChange={(v) =>
-                setNovoProjeto({ ...novoProjeto, Telefone_Lider: v })
-              }
-            />
-            <Campo
-              label="Editor"
-              value={novoProjeto.Editor}
-              onChange={(v) => setNovoProjeto({ ...novoProjeto, Editor: v })}
-            />
-            <Campo
-              label="Telefone do editor"
-              value={novoProjeto.Telefone_Editor}
-              onChange={(v) =>
-                setNovoProjeto({ ...novoProjeto, Telefone_Editor: v })
-              }
-            />
-            <Campo
-              label="Status"
-              value={novoProjeto.Status}
-              onChange={(v) => setNovoProjeto({ ...novoProjeto, Status: v })}
-            />
-            <Campo
-              label="Data de início"
-              value={novoProjeto.Data_Inicio}
-              onChange={(v) =>
-                setNovoProjeto({ ...novoProjeto, Data_Inicio: v })
-              }
-            />
-            <div style={{ gridColumn: "1 / -1" }}>
-              <Campo
-                label="Link da capa do projeto"
-                value={novoProjeto.Capa_URL}
-                onChange={(v) =>
-                  setNovoProjeto({ ...novoProjeto, Capa_URL: v })
-                }
-              />
-            </div>
-          </div>
-
-          <div style={{ marginTop: 16 }}>
-            <label style={labelStyle}>Observações</label>
-            <textarea
-              value={novoProjeto.Observacoes}
-              onChange={(e) =>
-                setNovoProjeto({ ...novoProjeto, Observacoes: e.target.value })
-              }
-              rows={3}
-              style={textareaStyle}
-            />
-          </div>
-
-          <div style={{ marginTop: 18 }}>
-            <div style={secaoTituloStyle}>Elenco inicial do projeto</div>
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr auto",
-                gap: 10,
-                marginBottom: 12,
-              }}
-            >
-              <input
-                placeholder="Personagem"
-                value={novoElencoProjeto.personagem}
-                onChange={(e) =>
-                  setNovoElencoProjeto({
-                    ...novoElencoProjeto,
-                    personagem: e.target.value,
-                  })
-                }
-                style={inputStyle}
-              />
-              <input
-                placeholder="Dublador"
-                value={novoElencoProjeto.dublador}
-                onChange={(e) =>
-                  setNovoElencoProjeto({
-                    ...novoElencoProjeto,
-                    dublador: e.target.value,
-                  })
-                }
-                style={inputStyle}
-              />
-              <input
-                placeholder="Função"
-                value={novoElencoProjeto.funcao}
-                onChange={(e) =>
-                  setNovoElencoProjeto({
-                    ...novoElencoProjeto,
-                    funcao: e.target.value,
-                  })
-                }
-                style={inputStyle}
-              />
-              <button
-                onClick={adicionarElencoNovoProjeto}
-                style={botaoPrimarioStyle}
-              >
-                Adicionar
-              </button>
-            </div>
-
-            {novoProjeto.Elenco.length > 0 && (
-              <div style={{ display: "grid", gap: 8 }}>
-                {novoProjeto.Elenco.map((item) => (
-                  <div
-                    key={item.id}
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      alignItems: "center",
-                      padding: "12px 14px",
-                      borderRadius: 14,
-                      background: "rgba(15, 23, 42, 0.62)",
-                      border: `1px solid ${estilos.borda}`,
-                    }}
-                  >
-                    <div>
-                      <strong>{item.personagem}</strong> — {item.dublador}
-                      <div style={{ color: estilos.textoSuave, marginTop: 4 }}>
-                        {item.funcao || "Sem função informada"}
-                      </div>
-                    </div>
-                    <button
-                      onClick={() => removerElencoNovoProjeto(item.id)}
-                      style={botaoSecundarioStyle}
-                    >
-                      Remover
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <button
-            onClick={criarProjeto}
-            style={{ ...botaoPrimarioStyleGrande, marginTop: 20 }}
-          >
-            Criar projeto
-          </button>
-        </Modal>
-      )}
-
-      {mostrarUsuarios && (
-        <Modal
-          titulo="Gestão de usuários"
-          onClose={() => setMostrarUsuarios(false)}
+          onClose={() => {
+            setMostrarNovoProjeto(false);
+            limparFormularioProjeto();
+          }}
           largo
         >
-          <div style={{ ...cardStyle, boxShadow: "none", marginBottom: 16 }}>
-            <div style={secaoTituloStyle}>Novo perfil</div>
-            <div
-              style={{
-                background: "rgba(15,23,42,0.96)8e6",
-                border: "1px solid #ffe2a8",
-                borderRadius: 14,
-                padding: 12,
-                marginBottom: 14,
-                color: "#7a4b00",
-                fontWeight: 700,
-              }}
-            >
-              Atenção: aqui você cria o perfil e permissões. Para a pessoa
-              conseguir entrar, ela também precisa existir em Supabase &gt;
-              Authentication &gt; Users.
-            </div>
-
+          <div style={{ display: "grid", gap: 18 }}>
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-                gap: 12,
+                gridTemplateColumns: isMobile ? "1fr" : "repeat(2, 1fr)",
+                gap: 14,
               }}
             >
-              <Campo
-                label="Nome"
-                value={novoUsuario.nome}
-                onChange={(v) => setNovoUsuario({ ...novoUsuario, nome: v })}
-              />
-              <Campo
-                label="E-mail/Login"
-                value={novoUsuario.login}
-                onChange={(v) => setNovoUsuario({ ...novoUsuario, login: v })}
-              />
-
-              <div>
-                <label style={labelStyle}>Cargo</label>
-                <select
-                  value={novoUsuario.cargo}
-                  onChange={(e) => {
-                    const cargo = e.target.value as Cargo;
-                    setNovoUsuario({
-                      ...novoUsuario,
-                      cargo,
-                      training_status: statusPadraoPorCargo(cargo),
-                      ...permissoesPadraoUsuario(cargo),
-                    });
-                  }}
-                  style={inputStyle}
-                >
-                  {cargosPermitidosParaCriar(usuarioLogado).map((cargo) => (
-                    <option key={cargo} value={cargo}>
-                      {cargoLabel(cargo)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {novoUsuario.cargo === "lider_treinamento" && (
-                <div>
-                  <label style={labelStyle}>Status do treinamento</label>
-                  <select
-                    value={novoUsuario.training_status || "em_andamento"}
+              {[
+                ["Nome do projeto", "Projeto"],
+                ["Tipo", "Tipo"],
+                ["Gênero", "Genero"],
+                ["Prioridade", "Prioridade"],
+                ["Dupla", "Dupla"],
+                ["Líder", "Lider"],
+                ["Telefone do líder", "Telefone_Lider"],
+                ["Editor", "Editor"],
+                ["Telefone do editor", "Telefone_Editor"],
+                ["Status", "Status"],
+                ["Data de início", "Data_Inicio"],
+                ["Capa do projeto (URL)", "Capa_URL"],
+                ["Drive — Pasta principal", "Drive_Pasta_Link"],
+                ["Drive — Vídeos dos personagens", "Drive_Videos_Link"],
+                ["Drive — Cortes / Cenas", "Drive_Cortes_Link"],
+                ["Drive — Finalizados", "Drive_Final_Link"],
+              ].map(([label, campo]) => (
+                <div key={campo}>
+                  <label style={labelStyle}>{label}</label>
+                  <input
+                    value={String((novoProjeto as any)[campo] || "")}
                     onChange={(e) =>
-                      setNovoUsuario({
-                        ...novoUsuario,
-                        training_status: e.target.value as TrainingStatus,
-                      })
+                      setNovoProjeto((anterior) => ({
+                        ...anterior,
+                        [campo]: e.target.value,
+                      }))
                     }
                     style={inputStyle}
-                  >
-                    <option value="pendente">Pendente</option>
-                    <option value="em_andamento">Em andamento</option>
-                    <option value="concluido">Concluído</option>
-                    <option value="reprovado">Reprovado</option>
-                  </select>
+                  />
                 </div>
-              )}
+              ))}
+            </div>
 
-              <div style={{ gridColumn: "1 / -1" }}>
-                <Campo
-                  label="Vínculo de acesso"
-                  value={novoUsuario.vinculo}
-                  onChange={(v) =>
-                    setNovoUsuario({ ...novoUsuario, vinculo: v })
+            <div>
+              <label style={labelStyle}>Observações</label>
+              <textarea
+                value={novoProjeto.Observacoes || ""}
+                onChange={(e) =>
+                  setNovoProjeto((anterior) => ({
+                    ...anterior,
+                    Observacoes: e.target.value,
+                  }))
+                }
+                style={{ ...textareaStyle, minHeight: 100 }}
+                placeholder="Observações iniciais do projeto..."
+              />
+            </div>
+
+            <div style={painelDarkStyle}>
+              <h3 style={{ ...tituloCardDarkStyle, marginBottom: 12 }}>
+                Elenco inicial
+              </h3>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile ? "1fr" : "repeat(4, 1fr)",
+                  gap: 12,
+                }}
+              >
+                <input
+                  placeholder="Personagem"
+                  value={novoElencoProjeto.personagem}
+                  onChange={(e) =>
+                    setNovoElencoProjeto((anterior) => ({
+                      ...anterior,
+                      personagem: e.target.value,
+                    }))
                   }
+                  style={inputStyle}
                 />
-                <p
-                  style={{
-                    marginTop: 8,
-                    color: estilos.textoSuave,
-                    fontSize: 13,
-                  }}
+                <input
+                  placeholder="Dublador"
+                  value={novoElencoProjeto.dublador}
+                  onChange={(e) =>
+                    setNovoElencoProjeto((anterior) => ({
+                      ...anterior,
+                      dublador: e.target.value,
+                    }))
+                  }
+                  style={inputStyle}
+                />
+                <input
+                  placeholder="Função"
+                  value={novoElencoProjeto.funcao}
+                  onChange={(e) =>
+                    setNovoElencoProjeto((anterior) => ({
+                      ...anterior,
+                      funcao: e.target.value,
+                    }))
+                  }
+                  style={inputStyle}
+                />
+                <button
+                  onClick={adicionarElencoNovoProjeto}
+                  style={botaoSecundarioStyle}
                 >
-                  Para líder, use exatamente o valor do campo{" "}
-                  <strong>Lider</strong>. Para editor, use exatamente o valor do
-                  campo <strong>Editor</strong>. Para diretoria/adm, use{" "}
-                  <strong>todos</strong>.
-                </p>
+                  Adicionar
+                </button>
               </div>
 
-              <div style={{ gridColumn: "1 / -1" }}>
-                <div style={secaoTituloStyle}>Permissões de acesso</div>
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
-                    gap: 10,
-                  }}
-                >
-                  {permissoesDisponiveis.map((item) => (
-                    <label
-                      key={item.chave}
+              {novoProjeto.Elenco.length > 0 && (
+                <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+                  {novoProjeto.Elenco.map((item, index) => (
+                    <div
+                      key={item.id || index}
                       style={{
                         display: "flex",
+                        justifyContent: "space-between",
+                        gap: 12,
                         alignItems: "center",
-                        gap: 8,
-                        border: `1px solid ${estilos.borda}`,
+                        background: "rgba(2,6,23,0.54)",
+                        border: "1px solid rgba(148,163,184,0.12)",
                         borderRadius: 12,
-                        padding: 10,
-                        background: "rgba(15, 23, 42, 0.62)",
-                        fontWeight: 700,
+                        padding: 12,
                       }}
                     >
-                      <input
-                        type="checkbox"
-                        checked={Boolean(novoUsuario[item.chave])}
-                        onChange={(e) =>
-                          setNovoUsuario({
-                            ...novoUsuario,
-                            [item.chave]: e.target.checked,
-                          })
-                        }
-                      />
-                      {item.label}
-                    </label>
+                      <div>
+                        <strong>{item.personagem}</strong>
+                        <span style={{ color: "#94a3b8" }}>
+                          {" "}
+                          — {item.dublador}{" "}
+                          {item.funcao ? `(${item.funcao})` : ""}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => removerElencoNovoProjeto(item.id)}
+                        style={botaoSecundarioStyle}
+                      >
+                        Remover
+                      </button>
+                    </div>
                   ))}
                 </div>
-              </div>
-            </div>
-
-            <button
-              onClick={criarUsuario}
-              style={{ ...botaoPrimarioStyleGrande, marginTop: 16 }}
-            >
-              Criar perfil
-            </button>
-          </div>
-
-          <div style={{ ...cardStyle, boxShadow: "none", padding: 0 }}>
-            <div style={{ overflowX: "auto" }}>
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  minWidth: 1180,
-                }}
-              >
-                <thead>
-                  <tr
-                    style={{
-                      background: "rgba(15, 23, 42, 0.62)",
-                      textAlign: "left",
-                    }}
-                  >
-                    <th style={thStyle}>Nome</th>
-                    <th style={thStyle}>Login</th>
-                    <th style={thStyle}>Cargo</th>
-                    <th style={thStyle}>Vínculo</th>
-                    <th style={thStyle}>Treinamento</th>
-                    <th style={thStyle}>Permissões</th>
-                    <th style={thStyle}>Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {usuariosVisiveis.map((u) => (
-                    <tr
-                      key={u.id || u.login}
-                      style={{ borderTop: `1px solid ${estilos.borda}` }}
-                    >
-                      <td style={tdStyle}>{u.nome}</td>
-                      <td style={tdStyle}>{u.login}</td>
-                      <td style={tdStyle}>{cargoLabel(u.cargo)}</td>
-                      <td style={tdStyle}>{u.vinculo}</td>
-                      <td style={tdStyle}>
-                        {podeGerenciarTreinamentos(usuarioLogado) &&
-                        u.cargo === "lider_treinamento" ? (
-                          <select
-                            value={u.training_status || "em_andamento"}
-                            onChange={(e) =>
-                              atualizarTrainingStatus(
-                                u,
-                                e.target.value as TrainingStatus
-                              )
-                            }
-                            style={inputStyle}
-                          >
-                            <option value="pendente">Pendente</option>
-                            <option value="em_andamento">Em andamento</option>
-                            <option value="concluido">Concluído</option>
-                            <option value="reprovado">Reprovado</option>
-                          </select>
-                        ) : (
-                          statusTreinamentoLabel(u.training_status)
-                        )}
-                      </td>
-                      <td style={tdStyle}>
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns:
-                              "repeat(2, minmax(120px, 1fr))",
-                            gap: 6,
-                          }}
-                        >
-                          {permissoesDisponiveis.map((item) => (
-                            <label
-                              key={`${u.id}-${item.chave}`}
-                              style={{
-                                display: "flex",
-                                gap: 6,
-                                alignItems: "center",
-                                fontSize: 12,
-                              }}
-                            >
-                              <input
-                                type="checkbox"
-                                checked={temAcesso(u, item.chave)}
-                                disabled={
-                                  u.cargo === "diretoria" &&
-                                  usuarioLogado.cargo !== "diretoria"
-                                }
-                                onChange={(e) =>
-                                  atualizarPermissaoUsuario(
-                                    u,
-                                    item.chave,
-                                    e.target.checked
-                                  )
-                                }
-                              />
-                              {item.label}
-                            </label>
-                          ))}
-                        </div>
-                      </td>
-                      <td style={tdStyle}>
-                        <div
-                          style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
-                        >
-                          {podeGerenciarTreinamentos(usuarioLogado) &&
-                            u.cargo === "lider_treinamento" && (
-                              <button
-                                onClick={() => concluirTreinamento(u)}
-                                style={botaoPrimarioStyle}
-                              >
-                                Concluir
-                              </button>
-                            )}
-                          <button
-                            onClick={() => excluirUsuario(u)}
-                            style={botaoSecundarioStyle}
-                            disabled={!podeExcluirUsuario(usuarioLogado, u)}
-                          >
-                            Excluir
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {mostrarMembros && (
-        <Modal
-          titulo="Membros da comunidade"
-          onClose={() => setMostrarMembros(false)}
-          largo
-        >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "repeat(4, 1fr)",
-              gap: 12,
-              marginBottom: 16,
-            }}
-          >
-            <ResumoCard
-              titulo="Total de membros"
-              valor={String(membros.length)}
-            />
-            <ResumoCard
-              titulo="Na comunidade"
-              valor={String(totalMembrosAtivos)}
-            />
-            <ResumoCard titulo="Saíram" valor={String(totalMembrosSaida)} />
-            <ResumoCard
-              titulo="Crescimento acumulado"
-              valor={String(
-                relatorioEntradaSaida[relatorioEntradaSaida.length - 1]
-                  ?.totalFinal || 0
               )}
-            />
-          </div>
+            </div>
 
-          <div style={{ ...cardStyle, boxShadow: "none", marginBottom: 16 }}>
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: isMobile ? "1fr" : "1fr auto auto auto",
+                display: "flex",
                 gap: 12,
-                alignItems: "center",
+                justifyContent: "flex-end",
+                flexWrap: "wrap",
               }}
             >
-              <input
-                placeholder="Buscar por nome, telefone, e-mail, status ou observação..."
-                value={queryMembros}
-                onChange={(e) => setQueryMembros(e.target.value)}
-                style={inputStyle}
-              />
               <button
-                onClick={recarregarMembros}
-                style={botaoSecundarioGrandeStyle}
-              >
-                Atualizar
-              </button>
-              <button
-                onClick={exportarMembrosCSV}
-                style={botaoSecundarioGrandeStyle}
-              >
-                Exportar membros
-              </button>
-              <button
-                onClick={exportarRelatorioEntradaSaidaCSV}
-                style={botaoSecundarioGrandeStyle}
-              >
-                Exportar entrada/saída
-              </button>
-            </div>
-          </div>
-
-          <div style={{ ...cardStyle, boxShadow: "none", marginBottom: 16 }}>
-            <div style={secaoTituloStyle}>Relatório de entrada e saída</div>
-            <div style={{ overflowX: "auto" }}>
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  minWidth: 760,
+                onClick={() => {
+                  setMostrarNovoProjeto(false);
+                  limparFormularioProjeto();
                 }}
+                style={botaoSecundarioStyle}
               >
-                <thead>
-                  <tr
-                    style={{
-                      background: "rgba(15, 23, 42, 0.62)",
-                      textAlign: "left",
-                    }}
-                  >
-                    <th style={thStyle}>Mês</th>
-                    <th style={thStyle}>Total inicial</th>
-                    <th style={thStyle}>Entradas</th>
-                    <th style={thStyle}>Saídas</th>
-                    <th style={thStyle}>Crescimento</th>
-                    <th style={thStyle}>Total final</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {relatorioEntradaSaida.map((r) => (
-                    <tr
-                      key={r.mes}
-                      style={{ borderTop: `1px solid ${estilos.borda}` }}
-                    >
-                      <td style={tdStyle}>{r.mesLabel}</td>
-                      <td style={tdStyle}>{r.totalInicial}</td>
-                      <td style={tdStyle}>{r.entradas}</td>
-                      <td style={tdStyle}>{r.saidas}</td>
-                      <td
-                        style={{
-                          ...tdStyle,
-                          color: r.crescimento < 0 ? "#c2410c" : "#087443",
-                          fontWeight: 800,
-                        }}
-                      >
-                        {r.crescimento}
-                      </td>
-                      <td style={tdStyle}>{r.totalFinal}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                Cancelar
+              </button>
+              <button onClick={criarProjeto} style={botaoPrimarioStyle}>
+                Criar projeto
+              </button>
             </div>
-          </div>
-
-          <div style={{ ...cardStyle, boxShadow: "none", padding: 0 }}>
-            <div style={{ overflowX: "auto" }}>
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  minWidth: 1120,
-                }}
-              >
-                <thead>
-                  <tr
-                    style={{
-                      background: "rgba(15, 23, 42, 0.62)",
-                      textAlign: "left",
-                    }}
-                  >
-                    <th style={thStyle}>Nome</th>
-                    <th style={thStyle}>Telefone</th>
-                    <th style={thStyle}>E-mail</th>
-                    <th style={thStyle}>Idade</th>
-                    <th style={thStyle}>Entrada</th>
-                    <th style={thStyle}>Status</th>
-                    <th style={thStyle}>Saída</th>
-                    <th style={thStyle}>Observação</th>
-                    <th style={thStyle}>Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {membrosFiltrados.map((m) => {
-                    const cor = corStatusMembro(m.status);
-                    return (
-                      <tr
-                        key={m.id || m.email || m.nome}
-                        style={{ borderTop: `1px solid ${estilos.borda}` }}
-                      >
-                        <td style={tdStyle}>
-                          <strong>{m.nome}</strong>
-                          <div
-                            style={{ color: estilos.textoSuave, marginTop: 4 }}
-                          >
-                            {m.habilidades || "Sem habilidades informadas"}
-                          </div>
-                        </td>
-                        <td style={tdStyle}>{m.telefone || "-"}</td>
-                        <td style={tdStyle}>{m.email || "-"}</td>
-                        <td style={tdStyle}>{m.idade || "-"}</td>
-                        <td style={tdStyle}>
-                          {formatarDataBR(m.data_entrada) || "-"}
-                        </td>
-                        <td style={tdStyle}>
-                          <span
-                            style={{
-                              display: "inline-block",
-                              padding: "7px 12px",
-                              borderRadius: 999,
-                              background: cor.bg,
-                              color: cor.color,
-                              fontWeight: 800,
-                              fontSize: 13,
-                            }}
-                          >
-                            {statusMembroLabel(m.status)}
-                          </span>
-                        </td>
-                        <td style={tdStyle}>
-                          {formatarDataBR(m.data_saida) || "-"}
-                        </td>
-                        <td
-                          style={{
-                            ...tdStyle,
-                            minWidth: 220,
-                            whiteSpace: "pre-line",
-                          }}
-                        >
-                          {m.observacao || "-"}
-                        </td>
-                        <td style={tdStyle}>
-                          <div
-                            style={{
-                              display: "flex",
-                              gap: 8,
-                              flexWrap: "wrap",
-                            }}
-                          >
-                            <button
-                              onClick={() =>
-                                alterarStatusMembro(m, "na_comunidade")
-                              }
-                              style={botaoSecundarioStyle}
-                            >
-                              Na comunidade
-                            </button>
-                            <button
-                              onClick={() => alterarStatusMembro(m, "saiu")}
-                              style={botaoSecundarioStyle}
-                            >
-                              Saiu
-                            </button>
-                            <button
-                              onClick={() => alterarStatusMembro(m, "banido")}
-                              style={botaoSecundarioStyle}
-                            >
-                              Banido
-                            </button>
-                            <button
-                              onClick={() => alterarStatusMembro(m, "pausado")}
-                              style={botaoSecundarioStyle}
-                            >
-                              Pausado
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </Modal>
-      )}
-
-      {mostrarRelatorios && (
-        <Modal
-          titulo="Painel de relatórios"
-          onClose={() => setMostrarRelatorios(false)}
-          largo
-        >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: isMobile
-                ? "1fr"
-                : "repeat(2, minmax(0, 1fr))",
-              gap: 16,
-            }}
-          >
-            {temAcesso(usuarioLogado, "acesso_relatorios_projetos") && (
-              <RelatorioCard
-                titulo="Relatório de projetos"
-                texto="Exporta a lista filtrada de projetos, status, líder, editor e observações."
-                botao="Exportar projetos"
-                onClick={exportarProjetosCSV}
-              />
-            )}
-            {temAcesso(usuarioLogado, "acesso_relatorios_elenco") && (
-              <RelatorioCard
-                titulo="Relatório de elenco"
-                texto="Exporta personagens, dubladores, funções e ranking de participação."
-                botao="Exportar elenco"
-                onClick={exportarElencoCSV}
-              />
-            )}
-            {temAcesso(usuarioLogado, "acesso_relatorios_membros") && (
-              <RelatorioCard
-                titulo="Relatório de membros"
-                texto="Exporta nomes, telefones, status, datas e observações da comunidade."
-                botao="Exportar membros"
-                onClick={exportarMembrosCSV}
-              />
-            )}
-            {temAcesso(usuarioLogado, "acesso_relatorios_entrada_saida") && (
-              <RelatorioCard
-                titulo="Entrada e saída"
-                texto="Exporta o comparativo mensal com total inicial, entradas, saídas e crescimento."
-                botao="Exportar entrada/saída"
-                onClick={exportarRelatorioEntradaSaidaCSV}
-              />
-            )}
-          </div>
-        </Modal>
-      )}
-
-      {mostrarCentralAjuda && (
-        <Modal
-          titulo="Central de Ajuda"
-          onClose={() => setMostrarCentralAjuda(false)}
-          largo
-        >
-          <div
-            style={{
-              background:
-                "linear-gradient(135deg, rgba(37,99,235,0.20), rgba(15,23,42,0.78))",
-              border: `1px solid ${estilos.borda}`,
-              borderRadius: 22,
-              padding: isMobile ? 18 : 28,
-              marginBottom: 18,
-              textAlign: "center",
-            }}
-          >
-            <div
-              style={{
-                color: estilos.azul,
-                fontWeight: 900,
-                letterSpacing: 0.8,
-                textTransform: "uppercase",
-                fontSize: 13,
-              }}
-            >
-              Central de ajuda DubWorks
-            </div>
-            <h2
-              style={{
-                margin: "10px 0 0",
-                color: estilos.texto,
-                fontSize: isMobile ? 26 : 38,
-              }}
-            >
-              Como podemos te ajudar hoje?
-            </h2>
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
-              gap: 16,
-            }}
-          >
-            <AjudaCard
-              titulo="Projetos"
-              texto="Crie, edite, arquive e acompanhe projetos por líder/editor."
-            />
-            <AjudaCard
-              titulo="Membros"
-              texto="Consulte membros, telefones, status e relatório de entrada/saída."
-            />
-            <AjudaCard
-              titulo="Usuários"
-              texto="Cadastre perfis, cargos e vínculos de acesso."
-            />
-            <AjudaCard
-              titulo="Relatórios"
-              texto="Exporte projetos, elenco, membros e crescimento mensal."
-            />
-            <AjudaCard
-              titulo="Permissões"
-              texto="Diretoria e ADM veem tudo. Líderes e editores veem apenas vínculos."
-            />
-            <AjudaCard
-              titulo="Treinamentos"
-              texto="Acompanhe líderes em treinamento e conclua alterações de cargo."
-            />
           </div>
         </Modal>
       )}
     </div>
   );
 }
+
+const painelDarkStyle: React.CSSProperties = {
+  background: "linear-gradient(145deg, rgba(15,23,42,0.88), rgba(2,6,23,0.82))",
+  border: "1px solid rgba(148,163,184,0.16)",
+  borderRadius: 18,
+  padding: 20,
+  boxShadow: "0 24px 70px rgba(0,0,0,0.26)",
+};
+
+const painelHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: 12,
+  paddingBottom: 14,
+  borderBottom: "1px solid rgba(148,163,184,0.12)",
+};
+
+const tituloCardDarkStyle: React.CSSProperties = {
+  margin: 0,
+  color: "#f8fafc",
+  fontSize: 18,
+  fontWeight: 900,
+};
+
+const pageHeaderDarkStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 16,
+  marginBottom: 4,
+};
+
+const breadcrumbDarkStyle: React.CSSProperties = {
+  color: "#cbd5e1",
+  fontSize: 14,
+  marginBottom: 10,
+};
+
+const pageTitleDarkStyle: React.CSSProperties = {
+  margin: 0,
+  color: "#f8fafc",
+  fontSize: 32,
+  lineHeight: 1.1,
+  fontWeight: 900,
+};
+
+const tabsDarkStyle: React.CSSProperties = {
+  display: "flex",
+  overflowX: "auto",
+  border: "1px solid rgba(148,163,184,0.16)",
+  borderRadius: 14,
+  background: "rgba(15,23,42,0.58)",
+};
+
+const tabButtonDarkStyle: React.CSSProperties = {
+  border: "none",
+  padding: "15px 22px",
+  fontWeight: 800,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const tabelaHeaderDarkStyle: React.CSSProperties = {
+  textAlign: "left",
+  padding: "14px 16px",
+  color: "#e2e8f0",
+  fontSize: 13,
+  background: "rgba(15,23,42,0.68)",
+  borderBottom: "1px solid rgba(148,163,184,0.14)",
+};
+
+const tabelaCellDarkStyle: React.CSSProperties = {
+  padding: "14px 16px",
+  color: "#cbd5e1",
+  verticalAlign: "top",
+};
+
+const sideSectionDarkStyle: React.CSSProperties = {
+  color: "#94a3b8",
+  fontSize: 11,
+  letterSpacing: 1,
+  fontWeight: 900,
+  padding: "0 10px 6px",
+};
+
+const reportCardDarkStyle: React.CSSProperties = {
+  background: "linear-gradient(145deg, rgba(15,23,42,0.88), rgba(2,6,23,0.82))",
+  border: "1px solid rgba(148,163,184,0.16)",
+  borderRadius: 18,
+  padding: 20,
+  minHeight: 120,
+  color: "#f8fafc",
+  textAlign: "left",
+  fontSize: 18,
+  fontWeight: 900,
+  cursor: "pointer",
+  boxShadow: "0 24px 70px rgba(0,0,0,0.26)",
+};
 
 function MenuCategoriaBloco({
   titulo,
