@@ -1948,13 +1948,10 @@ export default function App() {
         style={{
           background: estilos.branco,
           borderBottom: `1px solid ${estilos.borda}`,
-          padding: isMobile ? "12px 14px" : "14px 24px",
+          padding: isMobile ? "10px 12px" : "14px 24px",
           display: "flex",
-          flexDirection: isMobile ? "column" : "row",
-          justifyContent: "space-between",
-          alignItems: isMobile ? "stretch" : "center",
-          gap: isMobile ? 14 : 20,
-          flexWrap: "wrap",
+          flexDirection: "column",
+          gap: isMobile ? 10 : 16,
           position: "sticky",
           top: 0,
           zIndex: 30,
@@ -1965,23 +1962,24 @@ export default function App() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            width: isMobile ? "100%" : "auto",
-            gap: isMobile ? 10 : 18,
+            gap: isMobile ? 8 : 18,
+            width: "100%",
           }}
         >
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: isMobile ? 12 : 18,
+              gap: isMobile ? 10 : 18,
               minWidth: 0,
+              flex: 1,
             }}
           >
             <img
               src={LOGO_URL}
               alt="DubWorks"
               style={{
-                width: isMobile ? 86 : 120,
+                width: isMobile ? 68 : 120,
                 height: "auto",
                 objectFit: "contain",
                 flexShrink: 0,
@@ -1990,43 +1988,50 @@ export default function App() {
             <div style={{ minWidth: 0 }}>
               <div
                 style={{
-                  fontSize: isMobile ? 22 : 28,
+                  fontSize: isMobile ? 17 : 28,
                   fontWeight: 800,
                   color: estilos.azulEscuro,
-                  lineHeight: 1.1,
+                  lineHeight: 1.05,
                 }}
               >
                 DubWorks Manager
               </div>
-              <div style={{ color: estilos.textoSuave, marginTop: 4 }}>
-                Acesso interno de gerenciamento
-              </div>
+              {!isMobile && (
+                <div style={{ color: estilos.textoSuave, marginTop: 4 }}>
+                  Acesso interno de gerenciamento
+                </div>
+              )}
             </div>
           </div>
 
-          {isMobile && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                flexShrink: 0,
-                textAlign: "right",
-              }}
-            >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: isMobile ? 6 : 10,
+              flexShrink: 0,
+              textAlign: "right",
+            }}
+          >
+            {!isMobile && (
               <div>
-                <div style={{ fontWeight: 800, color: estilos.texto }}>
-                  {usuarioLogado.nome}
-                </div>
-                <div style={{ color: estilos.textoSuave, fontSize: 13 }}>
+                <div style={{ fontWeight: 800 }}>{usuarioLogado.nome}</div>
+                <div style={{ color: estilos.textoSuave, fontSize: 14 }}>
                   {cargoLabel(usuarioLogado.cargo)}
                 </div>
               </div>
-              <div style={avatarStyle}>
-                {usuarioLogado.nome?.charAt(0)?.toUpperCase() || "U"}
-              </div>
+            )}
+            <div
+              style={{
+                ...avatarStyle,
+                width: isMobile ? 42 : avatarStyle.width,
+                height: isMobile ? 42 : avatarStyle.height,
+                fontSize: isMobile ? 16 : avatarStyle.fontSize,
+              }}
+            >
+              {usuarioLogado.nome?.charAt(0)?.toUpperCase() || "U"}
             </div>
-          )}
+          </div>
         </div>
 
         <div
@@ -2034,9 +2039,9 @@ export default function App() {
             display: "flex",
             alignItems: "center",
             justifyContent: isMobile ? "center" : "flex-end",
-            gap: isMobile ? 10 : 18,
+            gap: isMobile ? 6 : 16,
             flexWrap: "wrap",
-            flex: 1,
+            width: "100%",
           }}
         >
           <button
@@ -2044,7 +2049,11 @@ export default function App() {
               setMostrarFerramentas(false);
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
-            style={menuTopoStyle}
+            style={{
+              ...menuTopoStyle,
+              fontSize: isMobile ? 14 : 16,
+              padding: isMobile ? "8px 8px" : undefined,
+            }}
           >
             Home
           </button>
@@ -2054,6 +2063,8 @@ export default function App() {
             style={{
               ...menuTopoStyle,
               color: mostrarFerramentas ? estilos.azul : estilos.texto,
+              fontSize: isMobile ? 14 : 16,
+              padding: isMobile ? "8px 8px" : undefined,
             }}
           >
             Ferramentas
@@ -2064,9 +2075,13 @@ export default function App() {
               setMostrarFerramentas(false);
               setMostrarCentralAjuda(true);
             }}
-            style={menuTopoStyle}
+            style={{
+              ...menuTopoStyle,
+              fontSize: isMobile ? 14 : 16,
+              padding: isMobile ? "8px 8px" : undefined,
+            }}
           >
-            Central de Ajuda
+            Ajuda
           </button>
 
           {podeCriarProjeto(usuarioLogado) && (
@@ -2076,7 +2091,12 @@ export default function App() {
                 limparFormularioProjeto();
                 setMostrarNovoProjeto(true);
               }}
-              style={botaoPrimarioStyle}
+              style={{
+                ...botaoPrimarioStyle,
+                padding: isMobile ? "9px 12px" : botaoPrimarioStyle.padding,
+                fontSize: isMobile ? 14 : 16,
+                borderRadius: isMobile ? 14 : botaoPrimarioStyle.borderRadius,
+              }}
             >
               Novo projeto
             </button>
@@ -2086,32 +2106,13 @@ export default function App() {
             onClick={sair}
             style={{
               ...botaoSecundarioStyle,
-              padding: isMobile ? "10px 16px" : botaoSecundarioStyle.padding,
+              padding: isMobile ? "9px 12px" : botaoSecundarioStyle.padding,
+              fontSize: isMobile ? 14 : 16,
+              borderRadius: isMobile ? 14 : botaoSecundarioStyle.borderRadius,
             }}
           >
             Sair
           </button>
-
-          <div
-            style={{
-              display: isMobile ? "none" : "flex",
-              alignItems: "center",
-              gap: 10,
-              textAlign: "right",
-              minWidth: 150,
-              justifyContent: "flex-end",
-            }}
-          >
-            <div>
-              <div style={{ fontWeight: 800 }}>{usuarioLogado.nome}</div>
-              <div style={{ color: estilos.textoSuave, fontSize: 14 }}>
-                {cargoLabel(usuarioLogado.cargo)}
-              </div>
-            </div>
-            <div style={avatarStyle}>
-              {usuarioLogado.nome?.charAt(0)?.toUpperCase() || "U"}
-            </div>
-          </div>
         </div>
 
         {mostrarFerramentas && (
