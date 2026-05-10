@@ -19,6 +19,8 @@ type TrainingStatus =
   | "concluido"
   | "reprovado";
 
+type StatusMembro = "na_comunidade" | "saiu" | "banido" | "pausado";
+
 type Usuario = {
   id?: number;
   nome: string;
@@ -29,7 +31,39 @@ type Usuario = {
   training_status?: TrainingStatus;
   criado_por?: string | null;
   data_criacao?: string | null;
+  acesso_projetos?: boolean | null;
+  acesso_membros?: boolean | null;
+  acesso_usuarios?: boolean | null;
+  acesso_relatorios_projetos?: boolean | null;
+  acesso_relatorios_elenco?: boolean | null;
+  acesso_relatorios_membros?: boolean | null;
+  acesso_relatorios_entrada_saida?: boolean | null;
+  acesso_exportacoes?: boolean | null;
+  acesso_treinamentos?: boolean | null;
 };
+
+type ChavePermissao =
+  | "acesso_projetos"
+  | "acesso_membros"
+  | "acesso_usuarios"
+  | "acesso_relatorios_projetos"
+  | "acesso_relatorios_elenco"
+  | "acesso_relatorios_membros"
+  | "acesso_relatorios_entrada_saida"
+  | "acesso_exportacoes"
+  | "acesso_treinamentos";
+
+const permissoesDisponiveis: { chave: ChavePermissao; label: string }[] = [
+  { chave: "acesso_projetos", label: "Projetos" },
+  { chave: "acesso_membros", label: "Membros" },
+  { chave: "acesso_usuarios", label: "Usuários" },
+  { chave: "acesso_relatorios_projetos", label: "Relatório de projetos" },
+  { chave: "acesso_relatorios_elenco", label: "Relatório de elenco" },
+  { chave: "acesso_relatorios_membros", label: "Relatório de membros" },
+  { chave: "acesso_relatorios_entrada_saida", label: "Entrada e saída" },
+  { chave: "acesso_exportacoes", label: "Exportações" },
+  { chave: "acesso_treinamentos", label: "Treinamentos" },
+];
 
 type ElencoItem = {
   id: string;
@@ -57,6 +91,31 @@ type Projeto = {
   Capa_URL: string;
   Arquivado: boolean;
   Elenco: ElencoItem[];
+};
+
+type Membro = {
+  id?: number;
+  nome: string;
+  telefone: string;
+  email: string;
+  data_nascimento?: string | null;
+  idade?: number | null;
+  habilidades?: string | null;
+  motivacao?: string | null;
+  status: StatusMembro;
+  data_entrada?: string | null;
+  data_saida?: string | null;
+  observacao?: string | null;
+};
+
+type RelatorioMes = {
+  mes: string;
+  mesLabel: string;
+  totalInicial: number;
+  entradas: number;
+  saidas: number;
+  crescimento: number;
+  totalFinal: number;
 };
 
 const projetoVazio: Projeto = {
@@ -126,30 +185,118 @@ function statusTreinamentoLabel(status?: TrainingStatus) {
   return labels[status || "nao_aplicavel"];
 }
 
+function statusMembroLabel(status?: StatusMembro) {
+  const labels: Record<StatusMembro, string> = {
+    na_comunidade: "Na comunidade",
+    saiu: "Saiu",
+    banido: "Banido",
+    pausado: "Pausado",
+  };
+  return labels[status || "na_comunidade"];
+}
+
+function corStatusMembro(status?: StatusMembro) {
+  const s = status || "na_comunidade";
+  if (s === "na_comunidade") return { bg: "#e7f8ef", color: "#087443" };
+  if (s === "saiu") return { bg: "#fff4e5", color: "#b45309" };
+  if (s === "banido") return { bg: "#fff1f0", color: "#c2410c" };
+  return { bg: "#eef4ff", color: "#3657c8" };
+}
+
 function statusPadraoPorCargo(cargo: Cargo): TrainingStatus {
   return cargo === "lider_treinamento" ? "em_andamento" : "nao_aplicavel";
 }
 
+function permissaoPadraoPorCargo(cargo: Cargo, chave: ChavePermissao) {
+  if (cargo === "diretoria") return true;
+
+  if (cargo === "adm") {
+    return [
+      "acesso_projetos",
+      "acesso_membros",
+      "acesso_usuarios",
+      "acesso_relatorios_projetos",
+      "acesso_relatorios_elenco",
+      "acesso_exportacoes",
+    ].includes(chave);
+  }
+
+  if (cargo === "adm_treinamento") {
+    return ["acesso_usuarios", "acesso_treinamentos"].includes(chave);
+  }
+
+  if (cargo === "lider" || cargo === "lider_treinamento") {
+    return [
+      "acesso_projetos",
+      "acesso_relatorios_elenco",
+      "acesso_exportacoes",
+    ].includes(chave);
+  }
+
+  if (cargo === "editor") {
+    return ["acesso_projetos"].includes(chave);
+  }
+
+  return false;
+}
+
+function temAcesso(usuario: Usuario | null, chave: ChavePermissao) {
+  if (!usuario) return false;
+  if (usuario.cargo === "diretoria") return true;
+
+  const valor = usuario[chave];
+  if (typeof valor === "boolean") return valor;
+
+  return permissaoPadraoPorCargo(usuario.cargo, chave);
+}
+
+function permissoesPadraoUsuario(cargo: Cargo) {
+  return permissoesDisponiveis.reduce((acc, item) => {
+    acc[item.chave] = permissaoPadraoPorCargo(cargo, item.chave);
+    return acc;
+  }, {} as Record<ChavePermissao, boolean>);
+}
+
 function podeVerProjeto(usuario: Usuario | null, projeto: Projeto) {
   if (!usuario) return false;
-  if (["diretoria", "adm", "adm_treinamento"].indexOf(usuario.cargo) !== -1)
+
+  const cargo = normalizar(usuario.cargo);
+  const vinculo = normalizar(usuario.vinculo);
+  const login = normalizar(usuario.login);
+  const nome = normalizar(usuario.nome);
+  const lider = normalizar(projeto.Lider);
+  const editor = normalizar(projeto.Editor);
+
+  if (["diretoria", "adm", "adm_treinamento"].indexOf(cargo) !== -1) {
     return true;
-  if (usuario.cargo === "lider" || usuario.cargo === "lider_treinamento") {
-    return normalizar(projeto.Lider) === normalizar(usuario.vinculo);
   }
-  if (usuario.cargo === "editor") {
-    return normalizar(projeto.Editor) === normalizar(usuario.vinculo);
+
+  if (cargo === "lider" || cargo === "lider_treinamento") {
+    return lider === vinculo || lider === login || lider === nome;
   }
+
+  if (cargo === "editor") {
+    return editor === vinculo || editor === login || editor === nome;
+  }
+
   return false;
 }
 
 function podeEditarProjeto(usuario: Usuario | null, projeto: Projeto | null) {
   if (!usuario || !projeto) return false;
-  if (usuario.cargo === "diretoria") return true;
-  if (usuario.cargo === "adm") return true;
-  if (usuario.cargo === "lider" || usuario.cargo === "lider_treinamento") {
-    return normalizar(projeto.Lider) === normalizar(usuario.vinculo);
+
+  const cargo = normalizar(usuario.cargo);
+  const vinculo = normalizar(usuario.vinculo);
+  const login = normalizar(usuario.login);
+  const nome = normalizar(usuario.nome);
+  const lider = normalizar(projeto.Lider);
+
+  if (cargo === "diretoria" || cargo === "adm") return true;
+
+  if (cargo === "lider" || cargo === "lider_treinamento") {
+    return lider === vinculo || lider === login || lider === nome;
   }
+
   return false;
 }
 
@@ -167,21 +314,30 @@ function podeSubirVideoEditor(
   projeto: Projeto | null
 ) {
   if (!usuario || !projeto) return false;
-  if (["diretoria", "adm"].indexOf(usuario.cargo) !== -1) return true;
-  if (usuario.cargo === "editor") {
-    return normalizar(projeto.Editor) === normalizar(usuario.vinculo);
+
+  const cargo = normalizar(usuario.cargo);
+  const vinculo = normalizar(usuario.vinculo);
+  const login = normalizar(usuario.login);
+  const nome = normalizar(usuario.nome);
+  const editor = normalizar(projeto.Editor);
+
+  if (["diretoria", "adm"].indexOf(cargo) !== -1) return true;
+  if (cargo === "editor") {
+    return editor === vinculo || editor === login || editor === nome;
   }
   return false;
 }
 
 function podeGerenciarUsuarios(usuario: Usuario | null) {
-  if (!usuario) return false;
-  return ["diretoria", "adm", "adm_treinamento"].indexOf(usuario.cargo) !== -1;
+  return temAcesso(usuario, "acesso_usuarios");
+}
+
+function podeGerenciarMembros(usuario: Usuario | null) {
+  return temAcesso(usuario, "acesso_membros");
 }
 
 function podeGerenciarTreinamentos(usuario: Usuario | null) {
-  if (!usuario) return false;
-  return ["diretoria", "adm_treinamento"].indexOf(usuario.cargo) !== -1;
+  return temAcesso(usuario, "acesso_treinamentos");
 }
 
 function podeExcluirUsuario(usuarioLogado: Usuario | null, alvo: Usuario) {
@@ -252,6 +408,16 @@ function mapUsuarioDb(item: any): Usuario {
       "nao_aplicavel") as TrainingStatus,
     criado_por: item.criado_por || null,
     data_criacao: item.data_criacao || null,
+    acesso_projetos: item.acesso_projetos ?? null,
+    acesso_membros: item.acesso_membros ?? null,
+    acesso_usuarios: item.acesso_usuarios ?? null,
+    acesso_relatorios_projetos: item.acesso_relatorios_projetos ?? null,
+    acesso_relatorios_elenco: item.acesso_relatorios_elenco ?? null,
+    acesso_relatorios_membros: item.acesso_relatorios_membros ?? null,
+    acesso_relatorios_entrada_saida:
+      item.acesso_relatorios_entrada_saida ?? null,
+    acesso_exportacoes: item.acesso_exportacoes ?? null,
+    acesso_treinamentos: item.acesso_treinamentos ?? null,
   };
 }
 
@@ -278,6 +444,25 @@ function mapProjetoDb(item: any, elenco: ElencoItem[]): Projeto {
   };
 }
 
+function mapMembroDb(item: any): Membro {
+  return {
+    id: item.id,
+    nome: item.nome || "",
+    telefone: item.telefone || "",
+    email: item.email || "",
+    data_nascimento: item.data_nascimento || null,
+    idade: item.idade ?? null,
+    habilidades: item.habilidades || "",
+    motivacao: item.motivacao || "",
+    status: (item.status_comunidade ||
+      item.status ||
+      "na_comunidade") as StatusMembro,
+    data_entrada: item.data_entrada || null,
+    data_saida: item.data_saida || null,
+    observacao: item.observacao || "",
+  };
+}
+
 async function carregarUsuariosBanco(): Promise<Usuario[]> {
   const { data, error } = await supabase
     .from("usuarios")
@@ -292,12 +477,65 @@ async function carregarUsuariosBanco(): Promise<Usuario[]> {
   return (data || []).map(mapUsuarioDb);
 }
 
+async function carregarMembrosBanco(): Promise<Membro[]> {
+  const { data, error } = await supabase
+    .from("membros")
+    .select("*")
+    .order("data_entrada", { ascending: false });
+
+  if (error) {
+    console.error("Erro ao buscar membros:", error);
+    return [];
+  }
+
+  return (data || []).map(mapMembroDb);
+}
+
+async function atualizarStatusMembroBanco(
+  membroId: number,
+  status: StatusMembro,
+  observacaoAtual?: string | null
+): Promise<boolean> {
+  const hoje = new Date().toISOString().slice(0, 10);
+  const observacaoAutomatica =
+    status === "na_comunidade"
+      ? `Retornou/permanece na comunidade em ${formatarDataBR(hoje)}.`
+      : `${statusMembroLabel(status)} em ${formatarDataBR(hoje)}.`;
+
+  const observacaoFinal = [observacaoAtual || "", observacaoAutomatica]
+    .filter(Boolean)
+    .join("\n");
+
+  const payload: any = {
+    status_comunidade: status,
+    observacao: observacaoFinal,
+  };
+
+  if (status === "na_comunidade") {
+    payload.data_saida = null;
+  } else {
+    payload.data_saida = hoje;
+  }
+
+  const { error } = await supabase
+    .from("membros")
+    .update(payload)
+    .eq("id", membroId);
+
+  if (error) {
+    console.error("Erro ao atualizar membro:", error);
+    return false;
+  }
+
+  return true;
+}
+
 async function buscarPerfilPorEmail(email: string): Promise<Usuario | null> {
   const emailNormalizado = normalizar(email);
 
   if (!emailNormalizado) return null;
 
-  const { data, error } = await comTimeout(
+  const { data, error } = (await comTimeout(
     supabase
       .from("usuarios")
       .select("*")
@@ -305,7 +543,7 @@ async function buscarPerfilPorEmail(email: string): Promise<Usuario | null> {
       .maybeSingle(),
     15000,
     "A busca do perfil demorou demais."
-  );
+  )) as any;
 
   if (error) {
     console.error("Perfil não encontrado:", error);
@@ -494,9 +732,104 @@ function comTimeout<T>(
   ]);
 }
 
+function parseDataFlex(valor?: string | null): Date | null {
+  if (!valor) return null;
+  const texto = String(valor).trim();
+  if (!texto) return null;
+
+  const dataIso = new Date(texto);
+  if (!Number.isNaN(dataIso.getTime())) return dataIso;
+
+  const partes = texto.split(/[\/\s:-]+/).map(Number);
+  if (partes.length >= 3) {
+    const [dia, mes, ano] = partes;
+    if (dia && mes && ano) {
+      const data = new Date(ano, mes - 1, dia);
+      if (!Number.isNaN(data.getTime())) return data;
+    }
+  }
+
+  return null;
+}
+
+function chaveMes(valor?: string | null): string {
+  const data = parseDataFlex(valor);
+  if (!data) return "";
+  return `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}`;
+}
+
+function formatarMesLabel(chave: string) {
+  const [ano, mes] = chave.split("-").map(Number);
+  if (!ano || !mes) return chave;
+  const data = new Date(ano, mes - 1, 1);
+  const nome = data.toLocaleDateString("pt-BR", { month: "long" });
+  return `${nome.charAt(0).toUpperCase()}${nome.slice(1)} / ${ano}`;
+}
+
+function formatarDataBR(valor?: string | null) {
+  const data = parseDataFlex(valor);
+  if (!data) return "";
+  return data.toLocaleDateString("pt-BR");
+}
+
+function gerarMesesEntre(inicio: string, fim: string) {
+  const [anoInicio, mesInicio] = inicio.split("-").map(Number);
+  const [anoFim, mesFim] = fim.split("-").map(Number);
+  const meses: string[] = [];
+  const data = new Date(anoInicio, mesInicio - 1, 1);
+  const limite = new Date(anoFim, mesFim - 1, 1);
+
+  while (data <= limite) {
+    meses.push(
+      `${data.getFullYear()}-${String(data.getMonth() + 1).padStart(2, "0")}`
+    );
+    data.setMonth(data.getMonth() + 1);
+  }
+
+  return meses;
+}
+
+function calcularRelatorioEntradaSaida(membros: Membro[]): RelatorioMes[] {
+  const chaves = membros
+    .flatMap((m) => [chaveMes(m.data_entrada), chaveMes(m.data_saida)])
+    .filter(Boolean)
+    .sort();
+
+  if (!chaves.length) return [];
+
+  const meses = gerarMesesEntre(chaves[0], chaves[chaves.length - 1]);
+  let totalInicial = 0;
+
+  return meses.map((mes) => {
+    const entradas = membros.filter(
+      (m) => chaveMes(m.data_entrada) === mes
+    ).length;
+    const saidas = membros.filter((m) => chaveMes(m.data_saida) === mes).length;
+    const crescimento = entradas - saidas;
+    const totalFinal = totalInicial + crescimento;
+
+    const linha = {
+      mes,
+      mesLabel: formatarMesLabel(mes),
+      totalInicial,
+      entradas,
+      saidas,
+      crescimento,
+      totalFinal,
+    };
+
+    totalInicial = totalFinal;
+    return linha;
+  });
+}
+
 export default function App() {
   const [projetos, setProjetos] = useState<Projeto[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [membros, setMembros] = useState<Membro[]>([]);
   const [query, setQuery] = useState("");
   const [statusFiltro, setStatusFiltro] = useState("Todos");
   const [usuarioLogado, setUsuarioLogado] = useState<Usuario | null>(null);
@@ -507,9 +840,23 @@ export default function App() {
   const [rascunho, setRascunho] = useState<Projeto | null>(null);
   const [mostrarNovoProjeto, setMostrarNovoProjeto] = useState(false);
   const [mostrarUsuarios, setMostrarUsuarios] = useState(false);
+  const [mostrarMembros, setMostrarMembros] = useState(false);
+  const [mostrarFerramentas, setMostrarFerramentas] = useState(false);
+  const [categoriaFerramentas, setCategoriaFerramentas] = useState<
+    "consultas" | "servicos" | "relatorios" | "financeiro"
+  >("consultas");
+  const [mostrarCentralAjuda, setMostrarCentralAjuda] = useState(false);
+  const [mostrarRelatorios, setMostrarRelatorios] = useState(false);
   const [mostrarArquivados, setMostrarArquivados] = useState(false);
+  const [queryMembros, setQueryMembros] = useState("");
   const [carregando, setCarregando] = useState(true);
   const [carregandoLogin, setCarregandoLogin] = useState(false);
+  const [larguraTela, setLarguraTela] = useState(
+    typeof window === "undefined" ? 1200 : window.innerWidth
+  );
+
+  const isMobile = larguraTela <= 768;
+  const isTablet = larguraTela <= 1100;
 
   const [novoProjeto, setNovoProjeto] = useState<Projeto>(projetoVazio);
   const [novoUsuario, setNovoUsuario] = useState<Usuario>({
@@ -519,11 +866,22 @@ export default function App() {
     cargo: "lider",
     vinculo: "",
     training_status: "nao_aplicavel",
+    ...permissoesPadraoUsuario("lider"),
   });
   const [novoElencoProjeto, setNovoElencoProjeto] =
     useState<ElencoItem>(elencoVazio);
   const [novoElencoRascunho, setNovoElencoRascunho] =
     useState<ElencoItem>(elencoVazio);
+
+  useEffect(() => {
+    function atualizarLargura() {
+      setLarguraTela(window.innerWidth);
+    }
+
+    atualizarLargura();
+    window.addEventListener("resize", atualizarLargura);
+    return () => window.removeEventListener("resize", atualizarLargura);
+  }, []);
 
   async function recarregarProjetos() {
     try {
@@ -554,6 +912,21 @@ export default function App() {
     }
   }
 
+  async function recarregarMembros() {
+    if (!podeGerenciarMembros(usuarioLogado)) return;
+
+    try {
+      const lista = await comTimeout(
+        carregarMembrosBanco(),
+        20000,
+        "A busca dos membros demorou demais."
+      );
+      setMembros(lista);
+    } catch (err) {
+      console.error("Erro ao recarregar membros:", err);
+    }
+  }
+
   useEffect(() => {
     async function restaurarSessaoERecarregar() {
       const { data } = await supabase.auth.getSession();
@@ -568,7 +941,14 @@ export default function App() {
       }
 
       const perfil = await buscarPerfilPorEmail(email);
-      if (perfil) setUsuarioLogado(perfil);
+      if (perfil) {
+        setUsuarioLogado(perfil);
+        if (podeGerenciarMembros(perfil)) {
+          carregarMembrosBanco()
+            .then(setMembros)
+            .catch((err) => console.error("Erro ao carregar membros:", err));
+        }
+      }
     }
 
     async function aoVoltarParaTela() {
@@ -580,14 +960,21 @@ export default function App() {
     restaurarSessaoERecarregar();
 
     const { data: listener } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      async (_event: any, session: any) => {
         const email = session?.user?.email?.trim().toLowerCase();
         if (!email) {
           setUsuarioLogado(null);
           return;
         }
         const perfil = await buscarPerfilPorEmail(email);
-        if (perfil) setUsuarioLogado(perfil);
+        if (perfil) {
+          setUsuarioLogado(perfil);
+          if (podeGerenciarMembros(perfil)) {
+            carregarMembrosBanco()
+              .then(setMembros)
+              .catch((err) => console.error("Erro ao carregar membros:", err));
+          }
+        }
       }
     );
 
@@ -623,6 +1010,7 @@ export default function App() {
         ...anterior,
         cargo: permitidos[0],
         training_status: statusPadraoPorCargo(permitidos[0]),
+        ...permissoesPadraoUsuario(permitidos[0]),
       }));
     }
   }, [usuarioLogado, novoUsuario.cargo]);
@@ -730,6 +1118,35 @@ export default function App() {
     return [];
   }, [usuarios, usuarioLogado]);
 
+  const membrosFiltrados = useMemo(() => {
+    const termo = normalizar(queryMembros);
+    if (!termo) return membros;
+
+    return membros.filter((m) =>
+      [
+        m.nome,
+        m.telefone,
+        m.email,
+        m.habilidades || "",
+        m.motivacao || "",
+        m.observacao || "",
+        statusMembroLabel(m.status),
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(termo)
+    );
+  }, [membros, queryMembros]);
+
+  const relatorioEntradaSaida = useMemo(() => {
+    return calcularRelatorioEntradaSaida(membros);
+  }, [membros]);
+
+  const totalMembrosAtivos = membros.filter(
+    (m) => m.status === "na_comunidade"
+  ).length;
+  const totalMembrosSaida = membros.filter((m) => m.status === "saiu").length;
+
   const totalProjetos = projetosVisiveis.length;
   const totalAtivos = projetosVisiveis.filter(
     (p) =>
@@ -763,14 +1180,14 @@ export default function App() {
         return;
       }
 
-      const { data, error } = await comTimeout(
+      const { data, error } = (await comTimeout(
         supabase.auth.signInWithPassword({
           email,
           password: senha,
         }),
         20000,
         "O login demorou demais para responder."
-      );
+      )) as any;
 
       if (error || !data.user?.email) {
         console.error("Erro no login:", error);
@@ -797,6 +1214,11 @@ export default function App() {
       setTimeout(() => {
         recarregarProjetos();
         recarregarUsuarios();
+        if (podeGerenciarMembros(perfil)) {
+          carregarMembrosBanco()
+            .then(setMembros)
+            .catch((err) => console.error("Erro ao carregar membros:", err));
+        }
       }, 0);
     } catch (err: any) {
       console.error("Erro inesperado no login:", err);
@@ -979,6 +1401,10 @@ export default function App() {
           ? novoUsuario.training_status || "em_andamento"
           : "nao_aplicavel",
       criado_por: usuarioLogado.login,
+      ...permissoesDisponiveis.reduce((acc, item) => {
+        acc[item.chave] = Boolean(novoUsuario[item.chave]);
+        return acc;
+      }, {} as Record<ChavePermissao, boolean>),
     };
 
     const { error } = await supabase.from("usuarios").insert([payload]);
@@ -990,13 +1416,15 @@ export default function App() {
     }
 
     await recarregarUsuarios();
+    const cargoInicial = permitidos[0] || "lider";
     setNovoUsuario({
       nome: "",
       login: "",
       senha: "",
-      cargo: permitidos[0] || "lider",
+      cargo: cargoInicial,
       vinculo: "",
-      training_status: statusPadraoPorCargo(permitidos[0] || "lider"),
+      training_status: statusPadraoPorCargo(cargoInicial),
+      ...permissoesPadraoUsuario(cargoInicial),
     });
 
     alert(
@@ -1156,6 +1584,34 @@ export default function App() {
     });
   }
 
+  async function atualizarPermissaoUsuario(
+    alvo: Usuario,
+    chave: ChavePermissao,
+    valor: boolean
+  ) {
+    if (!alvo.id || !podeGerenciarUsuarios(usuarioLogado)) return;
+
+    if (alvo.cargo === "diretoria" && usuarioLogado?.cargo !== "diretoria") {
+      alert("Somente diretoria pode alterar permissões de outra diretoria.");
+      return;
+    }
+
+    const { error } = await supabase
+      .from("usuarios")
+      .update({ [chave]: valor })
+      .eq("id", alvo.id);
+
+    if (error) {
+      console.error("Erro ao atualizar permissão:", error);
+      alert("Não consegui atualizar a permissão.");
+      return;
+    }
+
+    setUsuarios((lista) =>
+      lista.map((u) => (u.id === alvo.id ? { ...u, [chave]: valor } : u))
+    );
+  }
+
   function exportarProjetosCSV() {
     const cabecalhos = [
       "ID",
@@ -1263,6 +1719,108 @@ export default function App() {
     URL.revokeObjectURL(url);
   }
 
+  async function alterarStatusMembro(membro: Membro, status: StatusMembro) {
+    if (!membro.id || !podeGerenciarMembros(usuarioLogado)) return;
+
+    const confirmar = confirm(
+      `Alterar status de ${membro.nome} para "${statusMembroLabel(status)}"?`
+    );
+    if (!confirmar) return;
+
+    const ok = await atualizarStatusMembroBanco(
+      membro.id,
+      status,
+      membro.observacao
+    );
+
+    if (!ok) {
+      alert("Não consegui atualizar o membro.");
+      return;
+    }
+
+    await recarregarMembros();
+  }
+
+  function exportarMembrosCSV() {
+    const cabecalhos = [
+      "Nome",
+      "Telefone",
+      "Email",
+      "Idade",
+      "Data_Entrada",
+      "Status",
+      "Data_Saida",
+      "Habilidades",
+      "Observacao",
+    ];
+
+    const linhas = membrosFiltrados.map((m) =>
+      [
+        m.nome,
+        m.telefone,
+        m.email,
+        String(m.idade || ""),
+        formatarDataBR(m.data_entrada),
+        statusMembroLabel(m.status),
+        formatarDataBR(m.data_saida),
+        m.habilidades || "",
+        m.observacao || "",
+      ]
+        .map(escaparCSV)
+        .join(";")
+    );
+
+    const conteudo = "\uFEFF" + [cabecalhos.join(";"), ...linhas].join("\n");
+    const blob = new Blob([conteudo], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `membros_dubworks_${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function exportarRelatorioEntradaSaidaCSV() {
+    const cabecalhos = [
+      "Mês",
+      "Total inicial",
+      "Entradas",
+      "Saídas",
+      "Crescimento",
+      "Total final",
+    ];
+
+    const linhas = relatorioEntradaSaida.map((r) =>
+      [
+        r.mesLabel,
+        String(r.totalInicial),
+        String(r.entradas),
+        String(r.saidas),
+        String(r.crescimento),
+        String(r.totalFinal),
+      ]
+        .map(escaparCSV)
+        .join(";")
+    );
+
+    const conteudo = "\uFEFF" + [cabecalhos.join(";"), ...linhas].join("\n");
+    const blob = new Blob([conteudo], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `relatorio_entrada_saida_${new Date()
+      .toISOString()
+      .slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   if (!usuarioLogado) {
     return (
       <div
@@ -1272,15 +1830,16 @@ export default function App() {
             "linear-gradient(180deg, #0f3c8d 0%, #1456d9 45%, #f4f8fd 45%, #f4f8fd 100%)",
           display: "flex",
           justifyContent: "center",
-          alignItems: "center",
-          padding: 24,
+          alignItems: isMobile ? "flex-start" : "center",
+          padding: isMobile ? 14 : 24,
+          paddingTop: isMobile ? 26 : 24,
           fontFamily: "Arial, sans-serif",
         }}
       >
         <div
           style={{
             width: "100%",
-            maxWidth: 520,
+            maxWidth: isMobile ? "100%" : 520,
             background: "#fff",
             borderRadius: 28,
             boxShadow: "0 30px 80px rgba(6, 31, 75, 0.22)",
@@ -1291,7 +1850,7 @@ export default function App() {
           <div
             style={{
               background: "linear-gradient(135deg, #0d47a1, #1366d9)",
-              padding: 28,
+              padding: isMobile ? 22 : 28,
               color: "#fff",
             }}
           >
@@ -1305,13 +1864,15 @@ export default function App() {
                 marginBottom: 14,
               }}
             />
-            <h1 style={{ margin: 0, fontSize: 34 }}>DubWorks Manager</h1>
+            <h1 style={{ margin: 0, fontSize: isMobile ? 28 : 34 }}>
+              DubWorks Manager
+            </h1>
             <p style={{ marginTop: 8, opacity: 0.9, fontSize: 15 }}>
               Acesso interno de gerenciamento
             </p>
           </div>
 
-          <form onSubmit={fazerLogin} style={{ padding: 28 }}>
+          <form onSubmit={fazerLogin} style={{ padding: isMobile ? 20 : 28 }}>
             <label style={labelStyle}>E-mail</label>
             <input
               value={login}
@@ -1387,59 +1948,131 @@ export default function App() {
         style={{
           background: estilos.branco,
           borderBottom: `1px solid ${estilos.borda}`,
-          padding: "14px 24px",
+          padding: isMobile ? "12px 14px" : "14px 24px",
           display: "flex",
+          flexDirection: isMobile ? "column" : "row",
           justifyContent: "space-between",
-          alignItems: "center",
-          gap: 20,
+          alignItems: isMobile ? "stretch" : "center",
+          gap: isMobile ? 14 : 20,
           flexWrap: "wrap",
           position: "sticky",
           top: 0,
-          zIndex: 20,
+          zIndex: 30,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", gap: 18 }}>
-          <img
-            src={LOGO_URL}
-            alt="DubWorks"
-            style={{ width: 120, height: "auto", objectFit: "contain" }}
-          />
-          <div>
-            <div
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            width: isMobile ? "100%" : "auto",
+            gap: isMobile ? 10 : 18,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: isMobile ? 12 : 18,
+              minWidth: 0,
+            }}
+          >
+            <img
+              src={LOGO_URL}
+              alt="DubWorks"
               style={{
-                fontSize: 28,
-                fontWeight: 800,
-                color: estilos.azulEscuro,
+                width: isMobile ? 86 : 120,
+                height: "auto",
+                objectFit: "contain",
+                flexShrink: 0,
               }}
-            >
-              DubWorks Manager
-            </div>
-            <div style={{ color: estilos.textoSuave, marginTop: 4 }}>
-              Acesso interno de gerenciamento
+            />
+            <div style={{ minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: isMobile ? 22 : 28,
+                  fontWeight: 800,
+                  color: estilos.azulEscuro,
+                  lineHeight: 1.1,
+                }}
+              >
+                DubWorks Manager
+              </div>
+              <div style={{ color: estilos.textoSuave, marginTop: 4 }}>
+                Acesso interno de gerenciamento
+              </div>
             </div>
           </div>
+
+          {isMobile && (
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                flexShrink: 0,
+                textAlign: "right",
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 800, color: estilos.texto }}>
+                  {usuarioLogado.nome}
+                </div>
+                <div style={{ color: estilos.textoSuave, fontSize: 13 }}>
+                  {cargoLabel(usuarioLogado.cargo)}
+                </div>
+              </div>
+              <div style={avatarStyle}>
+                {usuarioLogado.nome?.charAt(0)?.toUpperCase() || "U"}
+              </div>
+            </div>
+          )}
         </div>
 
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 12,
+            justifyContent: isMobile ? "center" : "flex-end",
+            gap: isMobile ? 10 : 18,
             flexWrap: "wrap",
+            flex: 1,
           }}
         >
-          {podeGerenciarUsuarios(usuarioLogado) && (
-            <button
-              onClick={() => setMostrarUsuarios(true)}
-              style={botaoSecundarioStyle}
-            >
-              Usuários
-            </button>
-          )}
+          <button
+            onClick={() => {
+              setMostrarFerramentas(false);
+              window.scrollTo({ top: 0, behavior: "smooth" });
+            }}
+            style={menuTopoStyle}
+          >
+            Home
+          </button>
+
+          <button
+            onClick={() => setMostrarFerramentas((valor) => !valor)}
+            style={{
+              ...menuTopoStyle,
+              color: mostrarFerramentas ? estilos.azul : estilos.texto,
+            }}
+          >
+            Ferramentas
+          </button>
+
+          <button
+            onClick={() => {
+              setMostrarFerramentas(false);
+              setMostrarCentralAjuda(true);
+            }}
+            style={menuTopoStyle}
+          >
+            Central de Ajuda
+          </button>
 
           {podeCriarProjeto(usuarioLogado) && (
             <button
               onClick={() => {
+                setMostrarFerramentas(false);
                 limparFormularioProjeto();
                 setMostrarNovoProjeto(true);
               }}
@@ -1449,32 +2082,404 @@ export default function App() {
             </button>
           )}
 
-          <button onClick={exportarProjetosCSV} style={botaoSecundarioStyle}>
-            Exportar projetos
-          </button>
-
-          <button onClick={exportarElencoCSV} style={botaoSecundarioStyle}>
-            Exportar elenco
-          </button>
-
-          <button onClick={sair} style={botaoSecundarioStyle}>
+          <button
+            onClick={sair}
+            style={{
+              ...botaoSecundarioStyle,
+              padding: isMobile ? "10px 16px" : botaoSecundarioStyle.padding,
+            }}
+          >
             Sair
           </button>
 
-          <div style={{ textAlign: "right", minWidth: 120 }}>
-            <div style={{ fontWeight: 700 }}>{usuarioLogado.nome}</div>
-            <div style={{ color: estilos.textoSuave, fontSize: 14 }}>
-              {cargoLabel(usuarioLogado.cargo)}
+          <div
+            style={{
+              display: isMobile ? "none" : "flex",
+              alignItems: "center",
+              gap: 10,
+              textAlign: "right",
+              minWidth: 150,
+              justifyContent: "flex-end",
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 800 }}>{usuarioLogado.nome}</div>
+              <div style={{ color: estilos.textoSuave, fontSize: 14 }}>
+                {cargoLabel(usuarioLogado.cargo)}
+              </div>
+            </div>
+            <div style={avatarStyle}>
+              {usuarioLogado.nome?.charAt(0)?.toUpperCase() || "U"}
             </div>
           </div>
         </div>
+
+        {mostrarFerramentas && (
+          <div
+            style={{
+              position: isMobile ? "static" : "absolute",
+              left: 0,
+              right: 0,
+              top: "100%",
+              background: "#fff",
+              borderTop: `1px solid ${estilos.borda}`,
+              borderBottom: `1px solid ${estilos.borda}`,
+              boxShadow: "0 24px 55px rgba(13, 71, 161, 0.14)",
+              padding: isMobile ? 14 : "28px 42px",
+              zIndex: 31,
+            }}
+          >
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "1fr" : "280px 1fr",
+                gap: isMobile ? 16 : 36,
+                maxWidth: 1180,
+                margin: "0 auto",
+              }}
+            >
+              <div style={{ display: "grid", gap: 10, alignContent: "start" }}>
+                <MenuCategoriaBloco
+                  titulo="Consultas"
+                  ativo={categoriaFerramentas === "consultas"}
+                  onClick={() => setCategoriaFerramentas("consultas")}
+                >
+                  {temAcesso(usuarioLogado, "acesso_projetos") && (
+                    <SubmenuAcao
+                      titulo="Projetos"
+                      onClick={() => {
+                        setMostrarFerramentas(false);
+                        window.scrollTo({ top: 360, behavior: "smooth" });
+                      }}
+                    />
+                  )}
+                  {temAcesso(usuarioLogado, "acesso_membros") && (
+                    <SubmenuAcao
+                      titulo="Membros"
+                      onClick={() => {
+                        setMostrarFerramentas(false);
+                        setMostrarMembros(true);
+                        recarregarMembros();
+                      }}
+                    />
+                  )}
+                  {temAcesso(usuarioLogado, "acesso_usuarios") && (
+                    <SubmenuAcao
+                      titulo="Usuários"
+                      onClick={() => {
+                        setMostrarFerramentas(false);
+                        setMostrarUsuarios(true);
+                      }}
+                    />
+                  )}
+                  {temAcesso(usuarioLogado, "acesso_treinamentos") && (
+                    <SubmenuAcao
+                      titulo="Líderes em treinamento"
+                      onClick={() => {
+                        setMostrarFerramentas(false);
+                        setMostrarUsuarios(true);
+                      }}
+                    />
+                  )}
+                </MenuCategoriaBloco>
+
+                <MenuCategoriaBloco
+                  titulo="Serviços"
+                  ativo={categoriaFerramentas === "servicos"}
+                  onClick={() => setCategoriaFerramentas("servicos")}
+                >
+                  {podeCriarProjeto(usuarioLogado) && (
+                    <SubmenuAcao
+                      titulo="Novo projeto"
+                      onClick={() => {
+                        setMostrarFerramentas(false);
+                        limparFormularioProjeto();
+                        setMostrarNovoProjeto(true);
+                      }}
+                    />
+                  )}
+                  {temAcesso(usuarioLogado, "acesso_projetos") && (
+                    <SubmenuAcao
+                      titulo={
+                        mostrarArquivados
+                          ? "Ver projetos ativos"
+                          : "Projetos arquivados"
+                      }
+                      onClick={() => {
+                        setMostrarFerramentas(false);
+                        setMostrarArquivados(!mostrarArquivados);
+                        setSelecionadoId(null);
+                        setRascunho(null);
+                      }}
+                    />
+                  )}
+                  <SubmenuAcao
+                    titulo="Central de ajuda"
+                    onClick={() => {
+                      setMostrarFerramentas(false);
+                      setMostrarCentralAjuda(true);
+                    }}
+                  />
+                </MenuCategoriaBloco>
+
+                <MenuCategoriaBloco
+                  titulo="Relatórios"
+                  ativo={categoriaFerramentas === "relatorios"}
+                  onClick={() => setCategoriaFerramentas("relatorios")}
+                >
+                  <SubmenuAcao
+                    titulo="Painel de relatórios"
+                    onClick={() => {
+                      setMostrarFerramentas(false);
+                      setMostrarRelatorios(true);
+                    }}
+                  />
+                  {temAcesso(usuarioLogado, "acesso_relatorios_projetos") && (
+                    <SubmenuAcao
+                      titulo="Exportar projetos"
+                      onClick={() => {
+                        setMostrarFerramentas(false);
+                        exportarProjetosCSV();
+                      }}
+                    />
+                  )}
+                  {temAcesso(usuarioLogado, "acesso_relatorios_elenco") && (
+                    <SubmenuAcao
+                      titulo="Exportar elenco"
+                      onClick={() => {
+                        setMostrarFerramentas(false);
+                        exportarElencoCSV();
+                      }}
+                    />
+                  )}
+                  {temAcesso(usuarioLogado, "acesso_relatorios_membros") && (
+                    <SubmenuAcao
+                      titulo="Exportar membros"
+                      onClick={() => {
+                        setMostrarFerramentas(false);
+                        exportarMembrosCSV();
+                      }}
+                    />
+                  )}
+                  {temAcesso(
+                    usuarioLogado,
+                    "acesso_relatorios_entrada_saida"
+                  ) && (
+                    <SubmenuAcao
+                      titulo="Entrada e saída"
+                      onClick={() => {
+                        setMostrarFerramentas(false);
+                        exportarRelatorioEntradaSaidaCSV();
+                      }}
+                    />
+                  )}
+                </MenuCategoriaBloco>
+
+                <MenuCategoriaBloco
+                  titulo="Financeiro"
+                  ativo={categoriaFerramentas === "financeiro"}
+                  onClick={() => setCategoriaFerramentas("financeiro")}
+                >
+                  <SubmenuAcao
+                    titulo="Financeiro DubWorks"
+                    onClick={() =>
+                      alert("Área financeira reservada para uma próxima etapa.")
+                    }
+                  />
+                  <SubmenuAcao
+                    titulo="Dashboard financeiro"
+                    onClick={() =>
+                      alert("Dashboard financeiro ainda será desenvolvido.")
+                    }
+                  />
+                </MenuCategoriaBloco>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: isMobile
+                    ? "1fr"
+                    : "repeat(2, minmax(0, 1fr))",
+                  gap: isMobile ? 14 : 24,
+                  alignContent: "start",
+                }}
+              >
+                {categoriaFerramentas === "consultas" && (
+                  <>
+                    {temAcesso(usuarioLogado, "acesso_projetos") && (
+                      <MenuFerramentaItem
+                        titulo="Projetos"
+                        descricao="Voltar para a lista e edição dos projetos ativos."
+                        onClick={() => {
+                          setMostrarFerramentas(false);
+                          window.scrollTo({ top: 360, behavior: "smooth" });
+                        }}
+                      />
+                    )}
+                    {temAcesso(usuarioLogado, "acesso_membros") && (
+                      <MenuFerramentaItem
+                        titulo="Membros"
+                        descricao="Consultar nomes, telefones, status e histórico da comunidade."
+                        onClick={() => {
+                          setMostrarFerramentas(false);
+                          setMostrarMembros(true);
+                          recarregarMembros();
+                        }}
+                      />
+                    )}
+                    {temAcesso(usuarioLogado, "acesso_usuarios") && (
+                      <MenuFerramentaItem
+                        titulo="Usuários"
+                        descricao="Gerenciar acessos, cargos, vínculos e permissões."
+                        onClick={() => {
+                          setMostrarFerramentas(false);
+                          setMostrarUsuarios(true);
+                        }}
+                      />
+                    )}
+                    {temAcesso(usuarioLogado, "acesso_treinamentos") && (
+                      <MenuFerramentaItem
+                        titulo="Líderes em treinamento"
+                        descricao="Acompanhar status e concluir treinamentos de líderes."
+                        onClick={() => {
+                          setMostrarFerramentas(false);
+                          setMostrarUsuarios(true);
+                        }}
+                      />
+                    )}
+                  </>
+                )}
+
+                {categoriaFerramentas === "servicos" && (
+                  <>
+                    {podeCriarProjeto(usuarioLogado) && (
+                      <MenuFerramentaItem
+                        titulo="Novo projeto"
+                        descricao="Cadastrar projeto, líder, editor, status, capa e elenco inicial."
+                        onClick={() => {
+                          setMostrarFerramentas(false);
+                          limparFormularioProjeto();
+                          setMostrarNovoProjeto(true);
+                        }}
+                      />
+                    )}
+                    {temAcesso(usuarioLogado, "acesso_projetos") && (
+                      <MenuFerramentaItem
+                        titulo={
+                          mostrarArquivados
+                            ? "Ver projetos ativos"
+                            : "Projetos arquivados"
+                        }
+                        descricao="Alternar entre a lista de projetos ativos e arquivados."
+                        onClick={() => {
+                          setMostrarFerramentas(false);
+                          setMostrarArquivados(!mostrarArquivados);
+                          setSelecionadoId(null);
+                          setRascunho(null);
+                        }}
+                      />
+                    )}
+                    <MenuFerramentaItem
+                      titulo="Central de ajuda"
+                      descricao="Abrir os atalhos e tutoriais internos do sistema."
+                      onClick={() => {
+                        setMostrarFerramentas(false);
+                        setMostrarCentralAjuda(true);
+                      }}
+                    />
+                  </>
+                )}
+
+                {categoriaFerramentas === "relatorios" && (
+                  <>
+                    <MenuFerramentaItem
+                      titulo="Painel de relatórios"
+                      descricao="Escolher entre relatório de projetos, elenco, membros ou entrada/saída."
+                      onClick={() => {
+                        setMostrarFerramentas(false);
+                        setMostrarRelatorios(true);
+                      }}
+                    />
+                    {temAcesso(usuarioLogado, "acesso_relatorios_projetos") && (
+                      <MenuFerramentaItem
+                        titulo="Relatório de projetos"
+                        descricao="Exportar a lista filtrada de projetos."
+                        onClick={() => {
+                          setMostrarFerramentas(false);
+                          exportarProjetosCSV();
+                        }}
+                      />
+                    )}
+                    {temAcesso(usuarioLogado, "acesso_relatorios_elenco") && (
+                      <MenuFerramentaItem
+                        titulo="Relatório de elenco"
+                        descricao="Exportar personagens, dubladores e ranking."
+                        onClick={() => {
+                          setMostrarFerramentas(false);
+                          exportarElencoCSV();
+                        }}
+                      />
+                    )}
+                    {temAcesso(usuarioLogado, "acesso_relatorios_membros") && (
+                      <MenuFerramentaItem
+                        titulo="Relatório de membros"
+                        descricao="Exportar nomes, telefones, status e observações."
+                        onClick={() => {
+                          setMostrarFerramentas(false);
+                          exportarMembrosCSV();
+                        }}
+                      />
+                    )}
+                    {temAcesso(
+                      usuarioLogado,
+                      "acesso_relatorios_entrada_saida"
+                    ) && (
+                      <MenuFerramentaItem
+                        titulo="Entrada e saída"
+                        descricao="Exportar crescimento mensal da comunidade."
+                        onClick={() => {
+                          setMostrarFerramentas(false);
+                          exportarRelatorioEntradaSaidaCSV();
+                        }}
+                      />
+                    )}
+                  </>
+                )}
+
+                {categoriaFerramentas === "financeiro" && (
+                  <>
+                    <MenuFerramentaItem
+                      titulo="Financeiro DubWorks"
+                      descricao="Área reservada para controle futuro de gastos, TikTok e monetização."
+                      onClick={() =>
+                        alert(
+                          "Área financeira reservada para uma próxima etapa."
+                        )
+                      }
+                    />
+                    <MenuFerramentaItem
+                      titulo="Dashboard financeiro"
+                      descricao="Em breve: receitas, despesas, equipamentos e prestação de contas."
+                      onClick={() =>
+                        alert("Dashboard financeiro ainda será desenvolvido.")
+                      }
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </header>
 
-      <main style={{ padding: 24 }}>
+      <main style={{ padding: isMobile ? 12 : 24 }}>
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+            gridTemplateColumns: isMobile
+              ? "repeat(2, minmax(0, 1fr))"
+              : "repeat(auto-fit, minmax(220px, 1fr))",
             gap: 16,
             marginBottom: 18,
           }}
@@ -1489,6 +2494,12 @@ export default function App() {
             titulo="Registros de elenco"
             valor={String(totalElenco)}
           />
+          {podeGerenciarMembros(usuarioLogado) && (
+            <ResumoCard
+              titulo="Membros ativos"
+              valor={String(totalMembrosAtivos)}
+            />
+          )}
           {podeGerenciarTreinamentos(usuarioLogado) && (
             <ResumoCard
               titulo="Líderes em treinamento"
@@ -1502,7 +2513,11 @@ export default function App() {
             ...cardStyle,
             marginBottom: 18,
             display: "grid",
-            gridTemplateColumns: "1.4fr 220px 170px 170px 170px",
+            gridTemplateColumns: isMobile
+              ? "1fr"
+              : isTablet
+              ? "1fr 1fr"
+              : "1.4fr 220px 170px 170px 170px",
             gap: 12,
             alignItems: "center",
           }}
@@ -1555,7 +2570,7 @@ export default function App() {
         <div
           style={{
             display: "grid",
-            gridTemplateColumns: "1.45fr 1fr",
+            gridTemplateColumns: isTablet ? "1fr" : "1.45fr 1fr",
             gap: 20,
             alignItems: "start",
           }}
@@ -1724,7 +2739,7 @@ export default function App() {
                   <div
                     style={{
                       display: "grid",
-                      gridTemplateColumns: "1fr 1fr",
+                      gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
                       gap: 12,
                     }}
                   >
@@ -1929,7 +2944,9 @@ export default function App() {
                     <div
                       style={{
                         display: "grid",
-                        gridTemplateColumns: "1fr 1fr 1fr auto",
+                        gridTemplateColumns: isMobile
+                          ? "1fr"
+                          : "1fr 1fr 1fr auto",
                         gap: 10,
                         marginBottom: 14,
                       }}
@@ -2100,7 +3117,11 @@ export default function App() {
           onClose={() => setMostrarNovoProjeto(false)}
         >
           <div
-            style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
+              gap: 12,
+            }}
           >
             <Campo
               label="Projeto"
@@ -2197,7 +3218,7 @@ export default function App() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr auto",
+                gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr auto",
                 gap: 10,
                 marginBottom: 12,
               }}
@@ -2312,7 +3333,7 @@ export default function App() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr",
+                gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
                 gap: 12,
               }}
             >
@@ -2337,6 +3358,7 @@ export default function App() {
                       ...novoUsuario,
                       cargo,
                       training_status: statusPadraoPorCargo(cargo),
+                      ...permissoesPadraoUsuario(cargo),
                     });
                   }}
                   style={inputStyle}
@@ -2391,6 +3413,45 @@ export default function App() {
                   <strong>todos</strong>.
                 </p>
               </div>
+
+              <div style={{ gridColumn: "1 / -1" }}>
+                <div style={secaoTituloStyle}>Permissões de acesso</div>
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
+                    gap: 10,
+                  }}
+                >
+                  {permissoesDisponiveis.map((item) => (
+                    <label
+                      key={item.chave}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 8,
+                        border: `1px solid ${estilos.borda}`,
+                        borderRadius: 12,
+                        padding: 10,
+                        background: "#f8fbff",
+                        fontWeight: 700,
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={Boolean(novoUsuario[item.chave])}
+                        onChange={(e) =>
+                          setNovoUsuario({
+                            ...novoUsuario,
+                            [item.chave]: e.target.checked,
+                          })
+                        }
+                      />
+                      {item.label}
+                    </label>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <button
@@ -2407,7 +3468,7 @@ export default function App() {
                 style={{
                   width: "100%",
                   borderCollapse: "collapse",
-                  minWidth: 880,
+                  minWidth: 1180,
                 }}
               >
                 <thead>
@@ -2417,6 +3478,7 @@ export default function App() {
                     <th style={thStyle}>Cargo</th>
                     <th style={thStyle}>Vínculo</th>
                     <th style={thStyle}>Treinamento</th>
+                    <th style={thStyle}>Permissões</th>
                     <th style={thStyle}>Ações</th>
                   </tr>
                 </thead>
@@ -2454,6 +3516,45 @@ export default function App() {
                       </td>
                       <td style={tdStyle}>
                         <div
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns:
+                              "repeat(2, minmax(120px, 1fr))",
+                            gap: 6,
+                          }}
+                        >
+                          {permissoesDisponiveis.map((item) => (
+                            <label
+                              key={`${u.id}-${item.chave}`}
+                              style={{
+                                display: "flex",
+                                gap: 6,
+                                alignItems: "center",
+                                fontSize: 12,
+                              }}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={temAcesso(u, item.chave)}
+                                disabled={
+                                  u.cargo === "diretoria" &&
+                                  usuarioLogado.cargo !== "diretoria"
+                                }
+                                onChange={(e) =>
+                                  atualizarPermissaoUsuario(
+                                    u,
+                                    item.chave,
+                                    e.target.checked
+                                  )
+                                }
+                              />
+                              {item.label}
+                            </label>
+                          ))}
+                        </div>
+                      </td>
+                      <td style={tdStyle}>
+                        <div
                           style={{ display: "flex", gap: 8, flexWrap: "wrap" }}
                         >
                           {podeGerenciarTreinamentos(usuarioLogado) &&
@@ -2482,6 +3583,512 @@ export default function App() {
           </div>
         </Modal>
       )}
+
+      {mostrarMembros && (
+        <Modal
+          titulo="Membros da comunidade"
+          onClose={() => setMostrarMembros(false)}
+          largo
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(4, 1fr)",
+              gap: 12,
+              marginBottom: 16,
+            }}
+          >
+            <ResumoCard
+              titulo="Total de membros"
+              valor={String(membros.length)}
+            />
+            <ResumoCard
+              titulo="Na comunidade"
+              valor={String(totalMembrosAtivos)}
+            />
+            <ResumoCard titulo="Saíram" valor={String(totalMembrosSaida)} />
+            <ResumoCard
+              titulo="Crescimento acumulado"
+              valor={String(
+                relatorioEntradaSaida[relatorioEntradaSaida.length - 1]
+                  ?.totalFinal || 0
+              )}
+            />
+          </div>
+
+          <div style={{ ...cardStyle, boxShadow: "none", marginBottom: 16 }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobile ? "1fr" : "1fr auto auto auto",
+                gap: 12,
+                alignItems: "center",
+              }}
+            >
+              <input
+                placeholder="Buscar por nome, telefone, e-mail, status ou observação..."
+                value={queryMembros}
+                onChange={(e) => setQueryMembros(e.target.value)}
+                style={inputStyle}
+              />
+              <button
+                onClick={recarregarMembros}
+                style={botaoSecundarioGrandeStyle}
+              >
+                Atualizar
+              </button>
+              <button
+                onClick={exportarMembrosCSV}
+                style={botaoSecundarioGrandeStyle}
+              >
+                Exportar membros
+              </button>
+              <button
+                onClick={exportarRelatorioEntradaSaidaCSV}
+                style={botaoSecundarioGrandeStyle}
+              >
+                Exportar entrada/saída
+              </button>
+            </div>
+          </div>
+
+          <div style={{ ...cardStyle, boxShadow: "none", marginBottom: 16 }}>
+            <div style={secaoTituloStyle}>Relatório de entrada e saída</div>
+            <div style={{ overflowX: "auto" }}>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  minWidth: 760,
+                }}
+              >
+                <thead>
+                  <tr style={{ background: "#f8fbff", textAlign: "left" }}>
+                    <th style={thStyle}>Mês</th>
+                    <th style={thStyle}>Total inicial</th>
+                    <th style={thStyle}>Entradas</th>
+                    <th style={thStyle}>Saídas</th>
+                    <th style={thStyle}>Crescimento</th>
+                    <th style={thStyle}>Total final</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {relatorioEntradaSaida.map((r) => (
+                    <tr
+                      key={r.mes}
+                      style={{ borderTop: `1px solid ${estilos.borda}` }}
+                    >
+                      <td style={tdStyle}>{r.mesLabel}</td>
+                      <td style={tdStyle}>{r.totalInicial}</td>
+                      <td style={tdStyle}>{r.entradas}</td>
+                      <td style={tdStyle}>{r.saidas}</td>
+                      <td
+                        style={{
+                          ...tdStyle,
+                          color: r.crescimento < 0 ? "#c2410c" : "#087443",
+                          fontWeight: 800,
+                        }}
+                      >
+                        {r.crescimento}
+                      </td>
+                      <td style={tdStyle}>{r.totalFinal}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div style={{ ...cardStyle, boxShadow: "none", padding: 0 }}>
+            <div style={{ overflowX: "auto" }}>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  minWidth: 1120,
+                }}
+              >
+                <thead>
+                  <tr style={{ background: "#f8fbff", textAlign: "left" }}>
+                    <th style={thStyle}>Nome</th>
+                    <th style={thStyle}>Telefone</th>
+                    <th style={thStyle}>E-mail</th>
+                    <th style={thStyle}>Idade</th>
+                    <th style={thStyle}>Entrada</th>
+                    <th style={thStyle}>Status</th>
+                    <th style={thStyle}>Saída</th>
+                    <th style={thStyle}>Observação</th>
+                    <th style={thStyle}>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {membrosFiltrados.map((m) => {
+                    const cor = corStatusMembro(m.status);
+                    return (
+                      <tr
+                        key={m.id || m.email || m.nome}
+                        style={{ borderTop: `1px solid ${estilos.borda}` }}
+                      >
+                        <td style={tdStyle}>
+                          <strong>{m.nome}</strong>
+                          <div
+                            style={{ color: estilos.textoSuave, marginTop: 4 }}
+                          >
+                            {m.habilidades || "Sem habilidades informadas"}
+                          </div>
+                        </td>
+                        <td style={tdStyle}>{m.telefone || "-"}</td>
+                        <td style={tdStyle}>{m.email || "-"}</td>
+                        <td style={tdStyle}>{m.idade || "-"}</td>
+                        <td style={tdStyle}>
+                          {formatarDataBR(m.data_entrada) || "-"}
+                        </td>
+                        <td style={tdStyle}>
+                          <span
+                            style={{
+                              display: "inline-block",
+                              padding: "7px 12px",
+                              borderRadius: 999,
+                              background: cor.bg,
+                              color: cor.color,
+                              fontWeight: 800,
+                              fontSize: 13,
+                            }}
+                          >
+                            {statusMembroLabel(m.status)}
+                          </span>
+                        </td>
+                        <td style={tdStyle}>
+                          {formatarDataBR(m.data_saida) || "-"}
+                        </td>
+                        <td
+                          style={{
+                            ...tdStyle,
+                            minWidth: 220,
+                            whiteSpace: "pre-line",
+                          }}
+                        >
+                          {m.observacao || "-"}
+                        </td>
+                        <td style={tdStyle}>
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 8,
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            <button
+                              onClick={() =>
+                                alterarStatusMembro(m, "na_comunidade")
+                              }
+                              style={botaoSecundarioStyle}
+                            >
+                              Na comunidade
+                            </button>
+                            <button
+                              onClick={() => alterarStatusMembro(m, "saiu")}
+                              style={botaoSecundarioStyle}
+                            >
+                              Saiu
+                            </button>
+                            <button
+                              onClick={() => alterarStatusMembro(m, "banido")}
+                              style={botaoSecundarioStyle}
+                            >
+                              Banido
+                            </button>
+                            <button
+                              onClick={() => alterarStatusMembro(m, "pausado")}
+                              style={botaoSecundarioStyle}
+                            >
+                              Pausado
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {mostrarRelatorios && (
+        <Modal
+          titulo="Painel de relatórios"
+          onClose={() => setMostrarRelatorios(false)}
+          largo
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile
+                ? "1fr"
+                : "repeat(2, minmax(0, 1fr))",
+              gap: 16,
+            }}
+          >
+            {temAcesso(usuarioLogado, "acesso_relatorios_projetos") && (
+              <RelatorioCard
+                titulo="Relatório de projetos"
+                texto="Exporta a lista filtrada de projetos, status, líder, editor e observações."
+                botao="Exportar projetos"
+                onClick={exportarProjetosCSV}
+              />
+            )}
+            {temAcesso(usuarioLogado, "acesso_relatorios_elenco") && (
+              <RelatorioCard
+                titulo="Relatório de elenco"
+                texto="Exporta personagens, dubladores, funções e ranking de participação."
+                botao="Exportar elenco"
+                onClick={exportarElencoCSV}
+              />
+            )}
+            {temAcesso(usuarioLogado, "acesso_relatorios_membros") && (
+              <RelatorioCard
+                titulo="Relatório de membros"
+                texto="Exporta nomes, telefones, status, datas e observações da comunidade."
+                botao="Exportar membros"
+                onClick={exportarMembrosCSV}
+              />
+            )}
+            {temAcesso(usuarioLogado, "acesso_relatorios_entrada_saida") && (
+              <RelatorioCard
+                titulo="Entrada e saída"
+                texto="Exporta o comparativo mensal com total inicial, entradas, saídas e crescimento."
+                botao="Exportar entrada/saída"
+                onClick={exportarRelatorioEntradaSaidaCSV}
+              />
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {mostrarCentralAjuda && (
+        <Modal
+          titulo="Central de Ajuda"
+          onClose={() => setMostrarCentralAjuda(false)}
+          largo
+        >
+          <div
+            style={{
+              background: "linear-gradient(135deg, #eaf2ff, #f8fbff)",
+              border: `1px solid ${estilos.borda}`,
+              borderRadius: 22,
+              padding: isMobile ? 18 : 28,
+              marginBottom: 18,
+              textAlign: "center",
+            }}
+          >
+            <div
+              style={{
+                color: estilos.azul,
+                fontWeight: 900,
+                letterSpacing: 0.8,
+                textTransform: "uppercase",
+                fontSize: 13,
+              }}
+            >
+              Central de ajuda DubWorks
+            </div>
+            <h2
+              style={{
+                margin: "10px 0 0",
+                color: estilos.texto,
+                fontSize: isMobile ? 26 : 38,
+              }}
+            >
+              Como podemos te ajudar hoje?
+            </h2>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile ? "1fr" : "repeat(3, 1fr)",
+              gap: 16,
+            }}
+          >
+            <AjudaCard
+              titulo="Projetos"
+              texto="Crie, edite, arquive e acompanhe projetos por líder/editor."
+            />
+            <AjudaCard
+              titulo="Membros"
+              texto="Consulte membros, telefones, status e relatório de entrada/saída."
+            />
+            <AjudaCard
+              titulo="Usuários"
+              texto="Cadastre perfis, cargos e vínculos de acesso."
+            />
+            <AjudaCard
+              titulo="Relatórios"
+              texto="Exporte projetos, elenco, membros e crescimento mensal."
+            />
+            <AjudaCard
+              titulo="Permissões"
+              texto="Diretoria e ADM veem tudo. Líderes e editores veem apenas vínculos."
+            />
+            <AjudaCard
+              titulo="Treinamentos"
+              texto="Acompanhe líderes em treinamento e conclua alterações de cargo."
+            />
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function MenuCategoriaBloco({
+  titulo,
+  ativo,
+  onClick,
+  children,
+}: {
+  titulo: string;
+  ativo: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        border: `1px solid ${ativo ? estilos.borda : "transparent"}`,
+        borderRadius: 16,
+        background: ativo ? "#eef5ff" : "#fff",
+        overflow: "hidden",
+      }}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        style={ativo ? megaCategoriaAtivaStyle : megaCategoriaBotaoStyle}
+      >
+        <span>{titulo}</span>
+        <span>{ativo ? "⌄" : "›"}</span>
+      </button>
+
+      {ativo && (
+        <div
+          style={{
+            display: "grid",
+            gap: 6,
+            padding: "0 14px 14px",
+          }}
+        >
+          {children}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SubmenuAcao({
+  titulo,
+  onClick,
+}: {
+  titulo: string;
+  onClick: () => void;
+}) {
+  return (
+    <button type="button" onClick={onClick} style={submenuAcaoStyle}>
+      {titulo}
+    </button>
+  );
+}
+
+function MenuFerramentaItem({
+  titulo,
+  descricao,
+  onClick,
+}: {
+  titulo: string;
+  descricao: string;
+  onClick: () => void;
+}) {
+  return (
+    <button onClick={onClick} style={megaItemStyle}>
+      <div style={{ fontWeight: 900, color: estilos.azulEscuro, fontSize: 18 }}>
+        {titulo}
+      </div>
+      <div
+        style={{ color: estilos.textoSuave, marginTop: 5, lineHeight: 1.35 }}
+      >
+        {descricao}
+      </div>
+    </button>
+  );
+}
+
+function RelatorioCard({
+  titulo,
+  texto,
+  botao,
+  onClick,
+}: {
+  titulo: string;
+  texto: string;
+  botao: string;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      style={{
+        border: `1px solid ${estilos.borda}`,
+        borderRadius: 18,
+        padding: 22,
+        background: "#fff",
+        minHeight: 150,
+        boxShadow: "0 12px 28px rgba(13, 71, 161, 0.08)",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "space-between",
+        gap: 14,
+      }}
+    >
+      <div>
+        <div
+          style={{ fontWeight: 900, color: estilos.azulEscuro, fontSize: 20 }}
+        >
+          {titulo}
+        </div>
+        <div
+          style={{ color: estilos.textoSuave, marginTop: 8, lineHeight: 1.4 }}
+        >
+          {texto}
+        </div>
+      </div>
+      <button onClick={onClick} style={botaoPrimarioStyle}>
+        {botao}
+      </button>
+    </div>
+  );
+}
+
+function AjudaCard({ titulo, texto }: { titulo: string; texto: string }) {
+  return (
+    <div
+      style={{
+        border: `1px solid ${estilos.borda}`,
+        borderRadius: 18,
+        padding: 22,
+        background: "#fff",
+        minHeight: 130,
+        boxShadow: "0 12px 28px rgba(13, 71, 161, 0.08)",
+      }}
+    >
+      <div style={{ fontWeight: 900, color: estilos.azulEscuro, fontSize: 19 }}>
+        {titulo}
+      </div>
+      <div
+        style={{ color: estilos.textoSuave, marginTop: 8, lineHeight: 1.45 }}
+      >
+        {texto}
+      </div>
     </div>
   );
 }
@@ -2675,6 +4282,72 @@ const overlayStyle: React.CSSProperties = {
   justifyContent: "center",
   padding: 24,
   zIndex: 40,
+};
+
+const submenuAcaoStyle: React.CSSProperties = {
+  width: "100%",
+  border: "none",
+  background: "#fff",
+  color: estilos.texto,
+  textAlign: "left",
+  padding: "10px 12px",
+  borderRadius: 12,
+  fontWeight: 700,
+  cursor: "pointer",
+  fontSize: 14,
+};
+
+const menuTopoStyle: React.CSSProperties = {
+  border: "none",
+  background: "transparent",
+  color: estilos.texto,
+  fontWeight: 800,
+  cursor: "pointer",
+  padding: "10px 8px",
+  fontSize: 15,
+};
+
+const avatarStyle: React.CSSProperties = {
+  width: 44,
+  height: 44,
+  borderRadius: "50%",
+  background: "linear-gradient(135deg, #0d47a1, #1366d9)",
+  color: "#fff",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: 800,
+  fontSize: 18,
+  boxShadow: "0 8px 20px rgba(19, 102, 217, 0.20)",
+};
+
+const megaCategoriaStyle: React.CSSProperties = {
+  padding: "18px 22px",
+  borderRadius: 14,
+  fontWeight: 900,
+  color: estilos.texto,
+  background: "#fff",
+  border: `1px solid ${estilos.borda}`,
+};
+
+const megaCategoriaBotaoStyle: React.CSSProperties = {
+  ...megaCategoriaStyle,
+  textAlign: "left",
+  cursor: "pointer",
+};
+
+const megaCategoriaAtivaStyle: React.CSSProperties = {
+  ...megaCategoriaBotaoStyle,
+  color: estilos.azul,
+  background: "#eef5ff",
+};
+
+const megaItemStyle: React.CSSProperties = {
+  textAlign: "left",
+  border: "none",
+  background: "transparent",
+  cursor: "pointer",
+  padding: "14px 4px",
 };
 
 const botaoPrimarioStyle: React.CSSProperties = {
