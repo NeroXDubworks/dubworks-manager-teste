@@ -147,14 +147,14 @@ const elencoVazio: ElencoItem = {
 };
 
 const estilos = {
-  azul: "#175cd3",
-  azulEscuro: "#0d47a1",
-  azulClaro: "#eef5ff",
-  borda: "#d7e4f7",
-  texto: "#183153",
-  textoSuave: "#667085",
-  fundo: "#f4f8fd",
-  branco: "#ffffff",
+  azul: "#38bdf8",
+  azulEscuro: "#dbeafe",
+  azulClaro: "rgba(56, 189, 248, 0.14)",
+  borda: "rgba(148, 163, 184, 0.24)",
+  texto: "#f8fafc",
+  textoSuave: "#cbd5e1",
+  fundo: "#050816",
+  branco: "rgba(15, 23, 42, 0.94)",
 };
 
 function normalizar(valor?: string) {
@@ -197,10 +197,11 @@ function statusMembroLabel(status?: StatusMembro) {
 
 function corStatusMembro(status?: StatusMembro) {
   const s = status || "na_comunidade";
-  if (s === "na_comunidade") return { bg: "#e7f8ef", color: "#087443" };
-  if (s === "saiu") return { bg: "#fff4e5", color: "#b45309" };
-  if (s === "banido") return { bg: "#fff1f0", color: "#c2410c" };
-  return { bg: "#eef4ff", color: "#3657c8" };
+  if (s === "na_comunidade")
+    return { bg: "rgba(8,116,67,0.22)", color: "#087443" };
+  if (s === "saiu") return { bg: "rgba(15,23,42,0.96)4e5", color: "#b45309" };
+  if (s === "banido") return { bg: "rgba(15,23,42,0.96)1f0", color: "#c2410c" };
+  return { bg: "rgba(37,99,235,0.20)", color: "#93c5fd" };
 }
 
 function statusPadraoPorCargo(cargo: Cargo): TrainingStatus {
@@ -377,18 +378,18 @@ function cargosPermitidosParaCriar(usuario: Usuario | null): Cargo[] {
 function corStatus(status: string) {
   const s = normalizar(status);
   if (s.indexOf("conclu") !== -1 || s.indexOf("final") !== -1) {
-    return { bg: "#e7f8ef", color: "#087443" };
+    return { bg: "rgba(8,116,67,0.22)", color: "#087443" };
   }
   if (s.indexOf("exec") !== -1 || s.indexOf("andamento") !== -1) {
-    return { bg: "#eaf2ff", color: "#1456d9" };
+    return { bg: "rgba(37,99,235,0.20)", color: "#93c5fd" };
   }
   if (s.indexOf("interromp") !== -1 || s.indexOf("paus") !== -1) {
-    return { bg: "#fff1f0", color: "#c2410c" };
+    return { bg: "rgba(15,23,42,0.96)1f0", color: "#c2410c" };
   }
   if (s.indexOf("stand") !== -1) {
-    return { bg: "#eef4ff", color: "#3657c8" };
+    return { bg: "rgba(37,99,235,0.20)", color: "#93c5fd" };
   }
-  return { bg: "#f3f6fb", color: "#475467" };
+  return { bg: "rgba(30,41,59,0.80)", color: "#cbd5e1" };
 }
 
 function escaparCSV(valor?: string) {
@@ -929,31 +930,38 @@ export default function App() {
 
   useEffect(() => {
     async function restaurarSessaoERecarregar() {
-      const { data } = await supabase.auth.getSession();
-      const email = data.session?.user?.email?.trim().toLowerCase();
-
-      await recarregarProjetos();
-      await recarregarUsuarios();
-
-      if (!email) {
-        setUsuarioLogado(null);
-        return;
-      }
-
-      const perfil = await buscarPerfilPorEmail(email);
-      if (perfil) {
-        setUsuarioLogado(perfil);
-        if (podeGerenciarMembros(perfil)) {
-          carregarMembrosBanco()
-            .then(setMembros)
-            .catch((err) => console.error("Erro ao carregar membros:", err));
+      try {
+        const usuarioSalvo = localStorage.getItem("dubworks_usuario");
+        if (usuarioSalvo && !usuarioLogado) {
+          try {
+            setUsuarioLogado(JSON.parse(usuarioSalvo));
+          } catch {
+            localStorage.removeItem("dubworks_usuario");
+          }
         }
-      }
-    }
 
-    async function aoVoltarParaTela() {
-      if (document.visibilityState === "visible") {
-        await restaurarSessaoERecarregar();
+        await recarregarProjetos();
+        await recarregarUsuarios();
+
+        const { data } = await supabase.auth.getSession();
+        const email = data.session?.user?.email?.trim().toLowerCase();
+
+        if (!email) {
+          return;
+        }
+
+        const perfil = await buscarPerfilPorEmail(email);
+        if (perfil) {
+          setUsuarioLogado(perfil);
+          localStorage.setItem("dubworks_usuario", JSON.stringify(perfil));
+          if (podeGerenciarMembros(perfil)) {
+            carregarMembrosBanco()
+              .then(setMembros)
+              .catch((err) => console.error("Erro ao carregar membros:", err));
+          }
+        }
+      } catch (err) {
+        console.error("Erro ao restaurar sessão:", err);
       }
     }
 
@@ -962,13 +970,15 @@ export default function App() {
     const { data: listener } = supabase.auth.onAuthStateChange(
       async (_event: any, session: any) => {
         const email = session?.user?.email?.trim().toLowerCase();
+
         if (!email) {
-          setUsuarioLogado(null);
           return;
         }
+
         const perfil = await buscarPerfilPorEmail(email);
         if (perfil) {
           setUsuarioLogado(perfil);
+          localStorage.setItem("dubworks_usuario", JSON.stringify(perfil));
           if (podeGerenciarMembros(perfil)) {
             carregarMembrosBanco()
               .then(setMembros)
@@ -978,13 +988,8 @@ export default function App() {
       }
     );
 
-    document.addEventListener("visibilitychange", aoVoltarParaTela);
-    window.addEventListener("focus", aoVoltarParaTela);
-
     return () => {
       listener.subscription.unsubscribe();
-      document.removeEventListener("visibilitychange", aoVoltarParaTela);
-      window.removeEventListener("focus", aoVoltarParaTela);
     };
   }, [mostrarArquivados]);
 
@@ -1206,6 +1211,7 @@ export default function App() {
       }
 
       setUsuarioLogado(perfil);
+      localStorage.setItem("dubworks_usuario", JSON.stringify(perfil));
       setErroLogin("");
       setSelecionadoId(null);
 
@@ -1255,6 +1261,7 @@ export default function App() {
 
   async function sair() {
     await supabase.auth.signOut();
+    localStorage.removeItem("dubworks_usuario");
     setUsuarioLogado(null);
     setLogin("");
     setSenha("");
@@ -1826,110 +1833,229 @@ export default function App() {
       <div
         style={{
           minHeight: "100vh",
+          position: "relative",
+          overflow: "hidden",
           background:
-            "linear-gradient(180deg, #0f3c8d 0%, #1456d9 45%, #f4f8fd 45%, #f4f8fd 100%)",
+            "radial-gradient(circle at 18% 68%, rgba(37, 99, 235, 0.45), transparent 22%), radial-gradient(circle at 75% 28%, rgba(14, 165, 233, 0.36), transparent 24%), linear-gradient(135deg, #020617 0%, #111827 48%, #07152f 100%)",
           display: "flex",
           justifyContent: "center",
-          alignItems: isMobile ? "flex-start" : "center",
-          padding: isMobile ? 14 : 24,
-          paddingTop: isMobile ? 26 : 24,
+          alignItems: "center",
+          padding: isMobile ? 18 : 24,
           fontFamily: "Arial, sans-serif",
+          color: "#f8fafc",
         }}
       >
+        <style>{estilosAnimacao}</style>
+
         <div
           style={{
+            position: "absolute",
+            width: isMobile ? 170 : 260,
+            height: isMobile ? 170 : 260,
+            borderRadius: "50%",
+            background:
+              "radial-gradient(circle at 68% 26%, #7dd3fc 0%, #1d4ed8 34%, #020617 82%)",
+            top: isMobile ? 18 : 38,
+            left: isMobile ? "54%" : "50%",
+            transform: "translateX(-50%)",
+            filter: "drop-shadow(0 0 46px rgba(59, 130, 246, 0.55))",
+            animation: "dwFloat 7s ease-in-out infinite",
+            opacity: 0.98,
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            width: isMobile ? 150 : 230,
+            height: isMobile ? 150 : 230,
+            borderRadius: "50%",
+            background:
+              "radial-gradient(circle at 70% 28%, #38bdf8 0%, #2563eb 38%, #050816 84%)",
+            right: isMobile ? -70 : "12%",
+            top: isMobile ? 170 : "29%",
+            filter: "drop-shadow(0 0 42px rgba(59, 130, 246, 0.45))",
+            animation: "dwFloat 8s ease-in-out infinite reverse",
+            opacity: 0.82,
+          }}
+        />
+
+        <div
+          style={{
+            position: "absolute",
+            width: isMobile ? 170 : 260,
+            height: isMobile ? 170 : 260,
+            borderRadius: "50%",
+            background:
+              "radial-gradient(circle at 70% 28%, #60a5fa 0%, #1d4ed8 36%, #020617 86%)",
+            left: isMobile ? -92 : "12%",
+            bottom: isMobile ? 74 : "14%",
+            filter: "drop-shadow(0 0 42px rgba(37, 99, 235, 0.45))",
+            animation: "dwFloat 9s ease-in-out infinite",
+            opacity: 0.78,
+          }}
+        />
+
+        <div
+          style={{
+            position: "relative",
             width: "100%",
-            maxWidth: isMobile ? "100%" : 520,
-            background: "#fff",
-            borderRadius: 28,
-            boxShadow: "0 30px 80px rgba(6, 31, 75, 0.22)",
+            maxWidth: isMobile ? "100%" : 620,
+            padding: isMobile ? "82px 20px 24px" : "92px 58px 42px",
+            borderRadius: isMobile ? 30 : 34,
+            border: "1px solid rgba(191, 219, 254, 0.42)",
+            background:
+              "linear-gradient(145deg, rgba(15, 23, 42, 0.72), rgba(30, 41, 59, 0.52))",
+            backdropFilter: "blur(18px)",
+            boxShadow:
+              "0 34px 110px rgba(0, 0, 0, 0.48), inset 0 1px 0 rgba(255,255,255,0.14), 0 0 70px rgba(37, 99, 235, 0.18)",
             overflow: "hidden",
-            border: "1px solid #dbe7f7",
+            animation: "dwFadeUp .65s ease both",
           }}
         >
           <div
             style={{
-              background: "linear-gradient(135deg, #0d47a1, #1366d9)",
-              padding: isMobile ? 22 : 28,
-              color: "#fff",
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(90deg, transparent, rgba(96, 165, 250, 0.10), transparent)",
+              animation: "dwScan 5.6s linear infinite",
+              pointerEvents: "none",
             }}
-          >
+          />
+
+          <div style={{ position: "relative", zIndex: 1 }}>
             <img
               src={LOGO_URL}
               alt="DubWorks"
               style={{
-                width: 150,
+                width: isMobile ? 122 : 152,
                 height: "auto",
                 display: "block",
-                marginBottom: 14,
+                margin: "0 auto 20px",
+                filter: "drop-shadow(0 0 18px rgba(96, 165, 250, 0.32))",
               }}
             />
-            <h1 style={{ margin: 0, fontSize: isMobile ? 28 : 34 }}>
+
+            <div
+              style={{
+                textAlign: "center",
+                letterSpacing: 3,
+                fontSize: isMobile ? 15 : 17,
+                color: "#93c5fd",
+                fontWeight: 800,
+                textTransform: "uppercase",
+                marginBottom: 8,
+              }}
+            >
+              Acesso interno
+            </div>
+
+            <h1
+              style={{
+                margin: 0,
+                textAlign: "center",
+                fontSize: isMobile ? 30 : 40,
+                lineHeight: 1.05,
+                color: "#f8fafc",
+                textShadow: "0 0 28px rgba(59, 130, 246, 0.30)",
+              }}
+            >
               DubWorks Manager
             </h1>
-            <p style={{ marginTop: 8, opacity: 0.9, fontSize: 15 }}>
-              Acesso interno de gerenciamento
-            </p>
-          </div>
 
-          <form onSubmit={fazerLogin} style={{ padding: isMobile ? 20 : 28 }}>
-            <label style={labelStyle}>E-mail</label>
-            <input
-              value={login}
-              onChange={(e) => setLogin(e.target.value)}
-              placeholder="Digite seu e-mail"
-              style={{ ...inputStyle, marginBottom: 16 }}
-            />
-
-            <label style={labelStyle}>Senha</label>
-            <input
-              type="password"
-              value={senha}
-              onChange={(e) => setSenha(e.target.value)}
-              placeholder="Digite sua senha"
-              style={{ ...inputStyle, marginBottom: 16 }}
-            />
-
-            {erroLogin && (
-              <div
-                style={{
-                  background: "#fff2f0",
-                  color: "#c2410c",
-                  border: "1px solid #ffd7cc",
-                  padding: 12,
-                  borderRadius: 12,
-                  marginBottom: 16,
-                }}
-              >
-                {erroLogin}
-              </div>
-            )}
-
-            <button
-              type="submit"
-              disabled={carregandoLogin}
-              style={botaoPrimarioStyleGrande}
-            >
-              {carregandoLogin ? "Entrando..." : "Entrar"}
-            </button>
-
-            <button
-              type="button"
-              onClick={enviarRecuperacaoSenha}
+            <p
               style={{
-                marginTop: 12,
-                background: "transparent",
-                border: "none",
-                color: estilos.azulEscuro,
-                fontWeight: 700,
-                cursor: "pointer",
-                width: "100%",
-                padding: 10,
+                textAlign: "center",
+                marginTop: 10,
+                marginBottom: isMobile ? 22 : 30,
+                color: "#cbd5e1",
+                fontSize: isMobile ? 14 : 15,
               }}
             >
-              Esqueci minha senha
-            </button>
-          </form>
+              Central tecnológica de gerenciamento da DubWorks
+            </p>
+
+            <form onSubmit={fazerLogin}>
+              <label style={{ ...labelStyle, color: "#cbd5e1" }}>E-mail</label>
+              <input
+                value={login}
+                onChange={(e) => setLogin(e.target.value)}
+                placeholder="Digite seu e-mail"
+                style={{
+                  ...inputStyle,
+                  marginBottom: 16,
+                  background: "rgba(15, 23, 42, 0.72)",
+                  border: "1px solid rgba(147, 197, 253, 0.32)",
+                  color: "#f8fafc",
+                  boxShadow: "inset 0 0 0 1px rgba(37, 99, 235, 0.05)",
+                }}
+              />
+
+              <label style={{ ...labelStyle, color: "#cbd5e1" }}>Senha</label>
+              <input
+                type="password"
+                value={senha}
+                onChange={(e) => setSenha(e.target.value)}
+                placeholder="Digite sua senha"
+                style={{
+                  ...inputStyle,
+                  marginBottom: 16,
+                  background: "rgba(15, 23, 42, 0.72)",
+                  border: "1px solid rgba(147, 197, 253, 0.32)",
+                  color: "#f8fafc",
+                  boxShadow: "inset 0 0 0 1px rgba(37, 99, 235, 0.05)",
+                }}
+              />
+
+              {erroLogin && (
+                <div
+                  style={{
+                    background: "rgba(127, 29, 29, 0.35)",
+                    color: "#fecaca",
+                    border: "1px solid rgba(248, 113, 113, 0.35)",
+                    padding: 12,
+                    borderRadius: 14,
+                    marginBottom: 16,
+                  }}
+                >
+                  {erroLogin}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={carregandoLogin}
+                style={{
+                  ...botaoPrimarioStyleGrande,
+                  background:
+                    "linear-gradient(135deg, #2563eb 0%, #0ea5e9 100%)",
+                  boxShadow:
+                    "0 18px 40px rgba(37, 99, 235, 0.38), 0 0 24px rgba(14, 165, 233, 0.22)",
+                  letterSpacing: 0.4,
+                }}
+              >
+                {carregandoLogin ? "Entrando..." : "Entrar no sistema"}
+              </button>
+
+              <button
+                type="button"
+                onClick={enviarRecuperacaoSenha}
+                style={{
+                  marginTop: 14,
+                  background: "transparent",
+                  border: "none",
+                  color: "#93c5fd",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                  width: "100%",
+                  padding: 10,
+                }}
+              >
+                Esqueci minha senha
+              </button>
+            </form>
+          </div>
         </div>
       </div>
     );
@@ -1939,20 +2065,25 @@ export default function App() {
     <div
       style={{
         minHeight: "100vh",
-        background: estilos.fundo,
+        background:
+          "radial-gradient(circle at top left, rgba(37, 99, 235, 0.16), transparent 30%), radial-gradient(circle at 85% 20%, rgba(14, 165, 233, 0.10), transparent 28%), #050816",
         fontFamily: "Arial, sans-serif",
         color: estilos.texto,
       }}
     >
+      <style>{estilosAnimacao}</style>
       <header
         style={{
           background: estilos.branco,
           borderBottom: `1px solid ${estilos.borda}`,
-          padding: isMobile ? "8px 10px" : "8px 18px",
+          padding: isMobile ? "12px 14px" : "14px 24px",
           display: "flex",
           flexDirection: isMobile ? "column" : "row",
-          gap: isMobile ? 8 : 12,
-          position: "sticky",
+          justifyContent: "space-between",
+          alignItems: isMobile ? "stretch" : "center",
+          gap: isMobile ? 14 : 20,
+          flexWrap: "wrap",
+          position: "relative",
           top: 0,
           zIndex: 30,
         }}
@@ -1962,24 +2093,23 @@ export default function App() {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            gap: isMobile ? 8 : 18,
             width: isMobile ? "100%" : "auto",
+            gap: isMobile ? 10 : 18,
           }}
         >
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: isMobile ? 8 : 14,
+              gap: isMobile ? 12 : 18,
               minWidth: 0,
-              flex: 1,
             }}
           >
             <img
               src={LOGO_URL}
               alt="DubWorks"
               style={{
-                width: isMobile ? 62 : 96,
+                width: isMobile ? 86 : 120,
                 height: "auto",
                 objectFit: "contain",
                 flexShrink: 0,
@@ -1988,40 +2118,17 @@ export default function App() {
             <div style={{ minWidth: 0 }}>
               <div
                 style={{
-                  fontSize: isMobile ? 16 : 22,
+                  fontSize: isMobile ? 22 : 28,
                   fontWeight: 800,
                   color: estilos.azulEscuro,
-                  lineHeight: 1.05,
+                  lineHeight: 1.1,
                 }}
               >
                 DubWorks Manager
               </div>
-              {isMobile ? (
-                <div
-                  style={{
-                    color: estilos.textoSuave,
-                    marginTop: 3,
-                    fontSize: 12,
-                    lineHeight: 1.2,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    maxWidth: 180,
-                  }}
-                >
-                  {usuarioLogado.nome} • {cargoLabel(usuarioLogado.cargo)}
-                </div>
-              ) : (
-                <div
-                  style={{
-                    color: estilos.textoSuave,
-                    marginTop: 3,
-                    fontSize: 13,
-                  }}
-                >
-                  Acesso interno de gerenciamento
-                </div>
-              )}
+              <div style={{ color: estilos.textoSuave, marginTop: 4 }}>
+                Acesso interno de gerenciamento
+              </div>
             </div>
           </div>
 
@@ -2030,19 +2137,20 @@ export default function App() {
               style={{
                 display: "flex",
                 alignItems: "center",
-                gap: 6,
+                gap: 8,
                 flexShrink: 0,
                 textAlign: "right",
               }}
             >
-              <div
-                style={{
-                  ...avatarStyle,
-                  width: 40,
-                  height: 40,
-                  fontSize: 16,
-                }}
-              >
+              <div>
+                <div style={{ fontWeight: 800, color: estilos.texto }}>
+                  {usuarioLogado.nome}
+                </div>
+                <div style={{ color: estilos.textoSuave, fontSize: 13 }}>
+                  {cargoLabel(usuarioLogado.cargo)}
+                </div>
+              </div>
+              <div style={avatarStyle}>
                 {usuarioLogado.nome?.charAt(0)?.toUpperCase() || "U"}
               </div>
             </div>
@@ -2053,13 +2161,10 @@ export default function App() {
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: isMobile ? "flex-start" : "flex-end",
-            gap: isMobile ? 6 : 14,
-            flexWrap: isMobile ? "nowrap" : "wrap",
-            width: isMobile ? "100%" : "auto",
-            flex: isMobile ? undefined : 1,
-            overflowX: isMobile ? "auto" : "visible",
-            paddingBottom: isMobile ? 2 : 0,
+            justifyContent: isMobile ? "center" : "flex-end",
+            gap: isMobile ? 10 : 18,
+            flexWrap: "wrap",
+            flex: 1,
           }}
         >
           <button
@@ -2067,11 +2172,7 @@ export default function App() {
               setMostrarFerramentas(false);
               window.scrollTo({ top: 0, behavior: "smooth" });
             }}
-            style={{
-              ...menuTopoStyle,
-              fontSize: isMobile ? 13 : 15,
-              padding: isMobile ? "7px 7px" : undefined,
-            }}
+            style={menuTopoStyle}
           >
             Home
           </button>
@@ -2081,8 +2182,6 @@ export default function App() {
             style={{
               ...menuTopoStyle,
               color: mostrarFerramentas ? estilos.azul : estilos.texto,
-              fontSize: isMobile ? 13 : 15,
-              padding: isMobile ? "7px 7px" : undefined,
             }}
           >
             Ferramentas
@@ -2093,13 +2192,9 @@ export default function App() {
               setMostrarFerramentas(false);
               setMostrarCentralAjuda(true);
             }}
-            style={{
-              ...menuTopoStyle,
-              fontSize: isMobile ? 13 : 15,
-              padding: isMobile ? "7px 7px" : undefined,
-            }}
+            style={menuTopoStyle}
           >
-            Ajuda
+            Central de Ajuda
           </button>
 
           {podeCriarProjeto(usuarioLogado) && (
@@ -2109,12 +2204,7 @@ export default function App() {
                 limparFormularioProjeto();
                 setMostrarNovoProjeto(true);
               }}
-              style={{
-                ...botaoPrimarioStyle,
-                padding: isMobile ? "9px 12px" : botaoPrimarioStyle.padding,
-                fontSize: isMobile ? 14 : 16,
-                borderRadius: isMobile ? 14 : botaoPrimarioStyle.borderRadius,
-              }}
+              style={botaoPrimarioStyle}
             >
               Novo projeto
             </button>
@@ -2124,46 +2214,32 @@ export default function App() {
             onClick={sair}
             style={{
               ...botaoSecundarioStyle,
-              padding: isMobile ? "8px 10px" : "10px 16px",
-              fontSize: isMobile ? 13 : 15,
-              borderRadius: isMobile ? 13 : botaoSecundarioStyle.borderRadius,
-              whiteSpace: "nowrap",
+              padding: isMobile ? "10px 16px" : botaoSecundarioStyle.padding,
             }}
           >
             Sair
           </button>
 
-          {!isMobile && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 10,
-                textAlign: "right",
-                marginLeft: 8,
-                flexShrink: 0,
-              }}
-            >
-              <div>
-                <div style={{ fontWeight: 800, lineHeight: 1.1 }}>
-                  {usuarioLogado.nome}
-                </div>
-                <div style={{ color: estilos.textoSuave, fontSize: 13 }}>
-                  {cargoLabel(usuarioLogado.cargo)}
-                </div>
-              </div>
-              <div
-                style={{
-                  ...avatarStyle,
-                  width: 44,
-                  height: 44,
-                  fontSize: 18,
-                }}
-              >
-                {usuarioLogado.nome?.charAt(0)?.toUpperCase() || "U"}
+          <div
+            style={{
+              display: isMobile ? "none" : "flex",
+              alignItems: "center",
+              gap: 10,
+              textAlign: "right",
+              minWidth: 150,
+              justifyContent: "flex-end",
+            }}
+          >
+            <div>
+              <div style={{ fontWeight: 800 }}>{usuarioLogado.nome}</div>
+              <div style={{ color: estilos.textoSuave, fontSize: 14 }}>
+                {cargoLabel(usuarioLogado.cargo)}
               </div>
             </div>
-          )}
+            <div style={avatarStyle}>
+              {usuarioLogado.nome?.charAt(0)?.toUpperCase() || "U"}
+            </div>
+          </div>
         </div>
 
         {mostrarFerramentas && (
@@ -2173,7 +2249,7 @@ export default function App() {
               left: 0,
               right: 0,
               top: "100%",
-              background: "#fff",
+              background: "rgba(15, 23, 42, 0.82)",
               borderTop: `1px solid ${estilos.borda}`,
               borderBottom: `1px solid ${estilos.borda}`,
               boxShadow: "0 24px 55px rgba(13, 71, 161, 0.14)",
@@ -2632,7 +2708,8 @@ export default function App() {
               style={{
                 padding: "16px 18px",
                 borderBottom: `1px solid ${estilos.borda}`,
-                background: "linear-gradient(180deg, #f8fbff, #f1f6ff)",
+                background:
+                  "linear-gradient(180deg, rgba(15,23,42,0.78), #f1f6ff)",
                 fontWeight: 800,
                 color: estilos.azulEscuro,
                 fontSize: 20,
@@ -2651,7 +2728,12 @@ export default function App() {
                 }}
               >
                 <thead>
-                  <tr style={{ textAlign: "left", background: "#f8fbff" }}>
+                  <tr
+                    style={{
+                      textAlign: "left",
+                      background: "rgba(15, 23, 42, 0.62)",
+                    }}
+                  >
                     <th style={thStyle}>ID</th>
                     <th style={thStyle}>Projeto</th>
                     <th style={thStyle}>Tipo</th>
@@ -2673,7 +2755,9 @@ export default function App() {
                         onClick={() => setSelecionadoId(p.ID)}
                         style={{
                           cursor: "pointer",
-                          background: ativo ? "#eef5ff" : "#fff",
+                          background: ativo
+                            ? "rgba(56,189,248,0.14)"
+                            : "rgba(15,23,42,0.96)",
                           borderTop: `1px solid ${estilos.borda}`,
                         }}
                       >
@@ -2733,7 +2817,7 @@ export default function App() {
                         borderRadius: 18,
                         border: `1px solid ${estilos.borda}`,
                         marginBottom: 16,
-                        background: "#eef5ff",
+                        background: "rgba(59, 130, 246, 0.16)",
                       }}
                     />
                   ) : (
@@ -2744,8 +2828,8 @@ export default function App() {
                         borderRadius: 18,
                         border: `1px solid ${estilos.borda}`,
                         marginBottom: 16,
-                        background: "linear-gradient(135deg, #0d47a1, #1366d9)",
-                        color: "#fff",
+                        background: "linear-gradient(135deg, #dbeafe, #1366d9)",
+                        color: "rgba(15,23,42,0.96)",
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
@@ -2892,7 +2976,7 @@ export default function App() {
                           usuarioLogado,
                           selecionado
                         )
-                          ? "#fff"
+                          ? "rgba(15,23,42,0.96)"
                           : "#f4f6f8",
                       }}
                     />
@@ -2914,7 +2998,7 @@ export default function App() {
                           usuarioLogado,
                           selecionado
                         )
-                          ? "#fff"
+                          ? "rgba(15,23,42,0.96)"
                           : "#f4f6f8",
                       }}
                     />
@@ -2937,7 +3021,7 @@ export default function App() {
                         background:
                           podeEditarProjeto(usuarioLogado, selecionado) ||
                           podeSubirVideoEditor(usuarioLogado, selecionado)
-                            ? "#fff"
+                            ? "rgba(15,23,42,0.96)"
                             : "#f4f6f8",
                       }}
                     />
@@ -3089,7 +3173,7 @@ export default function App() {
                                 style={{
                                   marginTop: 8,
                                   display: "inline-block",
-                                  background: "#eaf2ff",
+                                  background: "rgba(37,99,235,0.20)",
                                   color: estilos.azulEscuro,
                                   padding: "6px 10px",
                                   borderRadius: 999,
@@ -3135,7 +3219,8 @@ export default function App() {
                         alignItems: "center",
                         padding: "12px 14px",
                         borderRadius: 14,
-                        background: idx === 0 ? "#edf4ff" : "#f8fbff",
+                        background:
+                          idx === 0 ? "#edf4ff" : "rgba(15,23,42,0.78)",
                         border: `1px solid ${estilos.borda}`,
                       }}
                     >
@@ -3145,7 +3230,7 @@ export default function App() {
                       <div
                         style={{
                           background: estilos.azul,
-                          color: "#fff",
+                          color: "rgba(15,23,42,0.96)",
                           borderRadius: 999,
                           padding: "6px 10px",
                           fontWeight: 700,
@@ -3327,7 +3412,7 @@ export default function App() {
                       alignItems: "center",
                       padding: "12px 14px",
                       borderRadius: 14,
-                      background: "#f8fbff",
+                      background: "rgba(15, 23, 42, 0.62)",
                       border: `1px solid ${estilos.borda}`,
                     }}
                   >
@@ -3368,7 +3453,7 @@ export default function App() {
             <div style={secaoTituloStyle}>Novo perfil</div>
             <div
               style={{
-                background: "#fff8e6",
+                background: "rgba(15,23,42,0.96)8e6",
                 border: "1px solid #ffe2a8",
                 borderRadius: 14,
                 padding: 12,
@@ -3485,7 +3570,7 @@ export default function App() {
                         border: `1px solid ${estilos.borda}`,
                         borderRadius: 12,
                         padding: 10,
-                        background: "#f8fbff",
+                        background: "rgba(15, 23, 42, 0.62)",
                         fontWeight: 700,
                       }}
                     >
@@ -3524,7 +3609,12 @@ export default function App() {
                 }}
               >
                 <thead>
-                  <tr style={{ background: "#f8fbff", textAlign: "left" }}>
+                  <tr
+                    style={{
+                      background: "rgba(15, 23, 42, 0.62)",
+                      textAlign: "left",
+                    }}
+                  >
                     <th style={thStyle}>Nome</th>
                     <th style={thStyle}>Login</th>
                     <th style={thStyle}>Cargo</th>
@@ -3715,7 +3805,12 @@ export default function App() {
                 }}
               >
                 <thead>
-                  <tr style={{ background: "#f8fbff", textAlign: "left" }}>
+                  <tr
+                    style={{
+                      background: "rgba(15, 23, 42, 0.62)",
+                      textAlign: "left",
+                    }}
+                  >
                     <th style={thStyle}>Mês</th>
                     <th style={thStyle}>Total inicial</th>
                     <th style={thStyle}>Entradas</th>
@@ -3761,7 +3856,12 @@ export default function App() {
                 }}
               >
                 <thead>
-                  <tr style={{ background: "#f8fbff", textAlign: "left" }}>
+                  <tr
+                    style={{
+                      background: "rgba(15, 23, 42, 0.62)",
+                      textAlign: "left",
+                    }}
+                  >
                     <th style={thStyle}>Nome</th>
                     <th style={thStyle}>Telefone</th>
                     <th style={thStyle}>E-mail</th>
@@ -3927,7 +4027,8 @@ export default function App() {
         >
           <div
             style={{
-              background: "linear-gradient(135deg, #eaf2ff, #f8fbff)",
+              background:
+                "linear-gradient(135deg, rgba(37,99,235,0.20), rgba(15,23,42,0.78))",
               border: `1px solid ${estilos.borda}`,
               borderRadius: 22,
               padding: isMobile ? 18 : 28,
@@ -4011,7 +4112,7 @@ function MenuCategoriaBloco({
       style={{
         border: `1px solid ${ativo ? estilos.borda : "transparent"}`,
         borderRadius: 16,
-        background: ativo ? "#eef5ff" : "#fff",
+        background: ativo ? "rgba(56,189,248,0.14)" : "rgba(15,23,42,0.96)",
         overflow: "hidden",
       }}
     >
@@ -4093,7 +4194,7 @@ function RelatorioCard({
         border: `1px solid ${estilos.borda}`,
         borderRadius: 18,
         padding: 22,
-        background: "#fff",
+        background: "rgba(15, 23, 42, 0.82)",
         minHeight: 150,
         boxShadow: "0 12px 28px rgba(13, 71, 161, 0.08)",
         display: "flex",
@@ -4128,7 +4229,7 @@ function AjudaCard({ titulo, texto }: { titulo: string; texto: string }) {
         border: `1px solid ${estilos.borda}`,
         borderRadius: 18,
         padding: 22,
-        background: "#fff",
+        background: "rgba(15, 23, 42, 0.82)",
         minHeight: 130,
         boxShadow: "0 12px 28px rgba(13, 71, 161, 0.08)",
       }}
@@ -4163,7 +4264,10 @@ function Campo({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        style={{ ...inputStyle, background: disabled ? "#f4f6f8" : "#fff" }}
+        style={{
+          ...inputStyle,
+          background: disabled ? "#f4f6f8" : "rgba(15,23,42,0.96)",
+        }}
       />
     </div>
   );
@@ -4186,7 +4290,7 @@ function Modal({
         style={{
           width: "100%",
           maxWidth: largo ? 980 : 860,
-          background: "#fff",
+          background: "rgba(15, 23, 42, 0.82)",
           borderRadius: 24,
           padding: 24,
           boxShadow: "0 30px 80px rgba(11, 61, 145, 0.25)",
@@ -4221,15 +4325,17 @@ function ResumoCard({ titulo, valor }: { titulo: string; valor: string }) {
     <div
       style={{
         ...cardStyle,
-        background: "linear-gradient(180deg, #ffffff, #f8fbff)",
+        background:
+          "linear-gradient(180deg, rgba(15,23,42,0.98), rgba(2,6,23,0.96))",
+        border: "1px solid rgba(56,189,248,0.18)",
+        boxShadow:
+          "0 18px 42px rgba(0,0,0,0.32), 0 0 28px rgba(56,189,248,0.10)",
       }}
     >
-      <div
-        style={{ color: estilos.textoSuave, fontSize: 15, marginBottom: 12 }}
-      >
+      <div style={{ color: "#cbd5e1", fontSize: 15, marginBottom: 12 }}>
         {titulo}
       </div>
-      <div style={{ fontSize: 40, fontWeight: 800, color: estilos.azulEscuro }}>
+      <div style={{ fontSize: 40, fontWeight: 800, color: "#dbeafe" }}>
         {valor}
       </div>
     </div>
@@ -4255,7 +4361,7 @@ function InfoPermissao({
         marginBottom: 16,
         padding: 12,
         borderRadius: 14,
-        background: "#f6faff",
+        background: "rgba(15,23,42,0.78)",
         border: `1px solid ${estilos.borda}`,
         color: estilos.texto,
         fontSize: 14,
@@ -4268,12 +4374,83 @@ function InfoPermissao({
   );
 }
 
+const estilosAnimacao = `
+@keyframes dwFloat {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+  50% { transform: translate3d(0, -16px, 0) scale(1.025); }
+}
+
+@keyframes dwFadeUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes dwPulse {
+  0%, 100% { transform: scale(1); opacity: 0.84; }
+  50% { transform: scale(1.06); opacity: 1; }
+}
+
+@keyframes dwScan {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(120%); }
+}
+
+button, input, select, textarea {
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease;
+}
+
+button:hover {
+  transform: translateY(-1px);
+}
+
+input::placeholder, textarea::placeholder {
+  color: rgba(203, 213, 225, 0.56);
+}
+
+select {
+  background: rgba(2, 6, 23, 0.88) !important;
+  color: #f8fafc !important;
+  border-color: rgba(148, 163, 184, 0.24) !important;
+}
+
+option {
+  background: #020617;
+  color: #f8fafc;
+}
+
+table {
+  background: rgba(15, 23, 42, 0.86) !important;
+  color: #f8fafc !important;
+}
+
+thead, tbody, tr, th, td {
+  color: #f8fafc !important;
+  border-color: rgba(148, 163, 184, 0.18) !important;
+}
+
+tr {
+  transition: background .18s ease;
+}
+
+tr:hover {
+  background: rgba(56, 189, 248, 0.08) !important;
+}
+
+* {
+  scrollbar-color: rgba(56, 189, 248, .55) rgba(15, 23, 42, .85);
+}
+`;
+
 const cardStyle: React.CSSProperties = {
-  background: "#fff",
+  background:
+    "linear-gradient(145deg, rgba(15, 23, 42, 0.96), rgba(2, 6, 23, 0.94))",
   border: `1px solid ${estilos.borda}`,
   borderRadius: 22,
   padding: 18,
-  boxShadow: "0 10px 28px rgba(17, 74, 156, 0.06)",
+  boxShadow:
+    "0 18px 45px rgba(0, 0, 0, 0.30), 0 0 28px rgba(56, 189, 248, 0.08)",
+  backdropFilter: "blur(14px)",
+  animation: "dwFadeUp .45s ease both",
 };
 
 const secaoTituloStyle: React.CSSProperties = {
@@ -4301,7 +4478,7 @@ const labelStyle: React.CSSProperties = {
   marginBottom: 7,
   fontSize: 13,
   fontWeight: 700,
-  color: estilos.texto,
+  color: estilos.textoSuave,
 };
 
 const inputStyle: React.CSSProperties = {
@@ -4310,6 +4487,8 @@ const inputStyle: React.CSSProperties = {
   padding: 13,
   borderRadius: 14,
   border: `1px solid ${estilos.borda}`,
+  background: "rgba(2, 6, 23, 0.88)",
+  color: estilos.texto,
   fontSize: 15,
   outline: "none",
 };
@@ -4320,6 +4499,8 @@ const textareaStyle: React.CSSProperties = {
   padding: 13,
   borderRadius: 14,
   border: `1px solid ${estilos.borda}`,
+  background: "rgba(2, 6, 23, 0.88)",
+  color: estilos.texto,
   fontSize: 15,
   resize: "vertical",
   outline: "none",
@@ -4339,7 +4520,7 @@ const overlayStyle: React.CSSProperties = {
 const submenuAcaoStyle: React.CSSProperties = {
   width: "100%",
   border: "none",
-  background: "#fff",
+  background: "rgba(15, 23, 42, 0.82)",
   color: estilos.texto,
   textAlign: "left",
   padding: "10px 12px",
@@ -4363,8 +4544,8 @@ const avatarStyle: React.CSSProperties = {
   width: 44,
   height: 44,
   borderRadius: "50%",
-  background: "linear-gradient(135deg, #0d47a1, #1366d9)",
-  color: "#fff",
+  background: "linear-gradient(135deg, #dbeafe, #1366d9)",
+  color: "rgba(15,23,42,0.96)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
@@ -4378,7 +4559,7 @@ const megaCategoriaStyle: React.CSSProperties = {
   borderRadius: 14,
   fontWeight: 900,
   color: estilos.texto,
-  background: "#fff",
+  background: "rgba(15, 23, 42, 0.88)",
   border: `1px solid ${estilos.borda}`,
 };
 
@@ -4391,7 +4572,7 @@ const megaCategoriaBotaoStyle: React.CSSProperties = {
 const megaCategoriaAtivaStyle: React.CSSProperties = {
   ...megaCategoriaBotaoStyle,
   color: estilos.azul,
-  background: "#eef5ff",
+  background: "rgba(59, 130, 246, 0.16)",
 };
 
 const megaItemStyle: React.CSSProperties = {
@@ -4403,8 +4584,8 @@ const megaItemStyle: React.CSSProperties = {
 };
 
 const botaoPrimarioStyle: React.CSSProperties = {
-  background: "linear-gradient(135deg, #0d47a1, #1366d9)",
-  color: "#fff",
+  background: "linear-gradient(135deg, #dbeafe, #1366d9)",
+  color: "rgba(15,23,42,0.96)",
   border: "none",
   borderRadius: 14,
   padding: "11px 16px",
@@ -4415,8 +4596,8 @@ const botaoPrimarioStyle: React.CSSProperties = {
 
 const botaoPrimarioStyleGrande: React.CSSProperties = {
   width: "100%",
-  background: "linear-gradient(135deg, #0d47a1, #1366d9)",
-  color: "#fff",
+  background: "linear-gradient(135deg, #dbeafe, #1366d9)",
+  color: "rgba(15,23,42,0.96)",
   border: "none",
   borderRadius: 16,
   padding: 16,
@@ -4427,7 +4608,7 @@ const botaoPrimarioStyleGrande: React.CSSProperties = {
 };
 
 const botaoSecundarioStyle: React.CSSProperties = {
-  background: "#fff",
+  background: "rgba(15, 23, 42, 0.72)",
   border: `1px solid ${estilos.borda}`,
   borderRadius: 14,
   padding: "11px 15px",
@@ -4437,7 +4618,7 @@ const botaoSecundarioStyle: React.CSSProperties = {
 };
 
 const botaoSecundarioGrandeStyle: React.CSSProperties = {
-  background: "#f8fbff",
+  background: "rgba(15, 23, 42, 0.72)",
   border: `1px solid ${estilos.borda}`,
   borderRadius: 14,
   padding: 14,
