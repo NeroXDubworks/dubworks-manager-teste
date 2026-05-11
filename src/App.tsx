@@ -122,6 +122,441 @@ type RelatorioMes = {
   totalFinal: number;
 };
 
+type RespostaTreinamento = {
+  id?: number;
+  usuario_login: string;
+  usuario_nome: string;
+  usuario_cargo: string;
+  modulo_id: string;
+  modulo_titulo: string;
+  pergunta: string;
+  alternativa_marcada: number;
+  alternativa_texto: string;
+  alternativa_correta: number;
+  correta: boolean;
+  explicacao: string;
+  data_resposta?: string | null;
+};
+
+type PerguntaTreinamento = {
+  pergunta: string;
+  alternativas: string[];
+  correta: number;
+  explicacao: string;
+};
+
+type ModuloTreinamento = {
+  id: string;
+  titulo: string;
+  descricao: string;
+  conteudos: string[];
+  checklist: string[];
+  pergunta?: PerguntaTreinamento;
+};
+
+const modulosTreinamentoLider: ModuloTreinamento[] = [
+  {
+    id: "papel-lider",
+    titulo: "1. O papel do líder de projetos",
+    descricao:
+      "Entender, de forma completa, o que é um líder de projetos e qual responsabilidade ele assume dentro da DubWorks.",
+    conteudos: [
+      "O líder de projetos é a pessoa responsável por transformar uma ideia em uma produção organizada. Ele acompanha o projeto desde a preparação até a entrega final.",
+      "Na DubWorks, o líder não é apenas alguém que cria grupo e manda aviso. Ele precisa garantir que o projeto tenha planejamento, pasta organizada, seleção clara, elenco definido, prazos combinados, acompanhamento de entregas e registros no sistema.",
+      "O líder funciona como uma ponte entre diretoria, editor e elenco. Quando alguém tem dúvida sobre prazo, personagem, pasta, formulário ou entrega, o líder precisa saber orientar ou buscar a resposta com a diretoria.",
+      "O líder não substitui a diretoria. A diretoria acompanha decisões maiores, aprova organização, orienta processos e pode interferir quando há problema grave, atraso recorrente ou desorganização.",
+      "O líder também não substitui o editor. O editor cuida da montagem/edição do material, enquanto o líder acompanha se o elenco entregou, se os arquivos estão no lugar certo e se o projeto está avançando.",
+      "A função principal do líder é manter o projeto vivo, organizado e rastreável. Se a diretoria abrir o DubWorks Manager, precisa entender o que está acontecendo sem depender de mensagens perdidas no WhatsApp.",
+      "Um bom líder precisa ter responsabilidade, comunicação, paciência, organização, atenção aos detalhes e compromisso com os registros semanais.",
+      "Se o projeto está parado, o líder precisa registrar. Se alguém sumiu, precisa registrar. Se o Drive está errado, precisa registrar. Se a edição avançou, também precisa registrar.",
+    ],
+    checklist: [
+      "Entendeu o papel do líder",
+      "Entendeu que o líder organiza o projeto do início ao fim",
+      "Entendeu a diferença entre líder, editor e diretoria",
+      "Entendeu que tudo precisa ficar registrado no sistema",
+    ],
+    pergunta: {
+      pergunta:
+        "Qual é a principal função do líder de projetos dentro da DubWorks?",
+      alternativas: [
+        "Apenas escolher os dubladores e deixar o resto com a diretoria.",
+        "Organizar, acompanhar, comunicar e registrar o andamento do projeto do início ao fim.",
+        "Fazer a edição final de todos os vídeos.",
+        "Criar grupos no WhatsApp sem precisar acompanhar as entregas.",
+      ],
+      correta: 1,
+      explicacao:
+        "O líder é responsável por manter o projeto organizado, acompanhar entregas, comunicar problemas e registrar tudo no sistema.",
+    },
+  },
+  {
+    id: "responsabilidades",
+    titulo: "2. Funções e responsabilidades do líder",
+    descricao:
+      "Aprender todas as responsabilidades práticas que o líder assume ao cuidar de um projeto.",
+    conteudos: [
+      "Antes de abrir uma seleção, o líder precisa planejar o projeto. Isso inclui entender o tipo de projeto, a duração, a quantidade de personagens, a dificuldade e o prazo realista.",
+      "O líder deve organizar as pastas do projeto no Drive seguindo o padrão da DubWorks. Isso evita arquivos perdidos e facilita a revisão da diretoria.",
+      "O líder também precisa preparar os formulários. Um formulário mal configurado pode impedir o envio dos testes ou misturar arquivos de personagens diferentes.",
+      "Durante a seleção, o líder deve divulgar corretamente o projeto, conferir se os links funcionam e responder dúvidas básicas dos membros.",
+      "Depois da seleção, o líder organiza o elenco, registra os personagens no sistema e orienta cada dublador sobre o que precisa entregar.",
+      "Durante a produção, o líder acompanha gravações, cobra pendências com respeito, mantém contato com o editor e avisa a diretoria quando algo sai do controle.",
+      "Toda semana, mesmo que nada tenha acontecido, o líder precisa registrar o status. Um projeto sem registro parece abandonado.",
+      "Se houver troca de líder, troca de editor, atraso, substituição de dublador, correção de link ou entrega final, isso precisa aparecer no histórico/registro do projeto.",
+    ],
+    checklist: [
+      "Sabe planejar antes de abrir seleção",
+      "Sabe organizar Drive",
+      "Sabe preparar formulários",
+      "Sabe acompanhar entregas",
+      "Sabe registrar andamento",
+    ],
+    pergunta: {
+      pergunta:
+        "O que o líder deve fazer quando um projeto fica parado ou sem entregas?",
+      alternativas: [
+        "Não fazer nada e esperar alguém perguntar.",
+        "Apagar o projeto do sistema.",
+        "Registrar a situação, identificar o motivo e comunicar a diretoria se necessário.",
+        "Culpar o editor e sair do projeto.",
+      ],
+      correta: 2,
+      explicacao:
+        "Projeto parado também precisa de registro. A diretoria precisa saber o motivo e o próximo passo.",
+    },
+  },
+  {
+    id: "sistema",
+    titulo: "3. Como mexer no DubWorks Manager",
+    descricao:
+      "Aprender a usar o sistema interno da DubWorks para criar, acompanhar e atualizar projetos.",
+    conteudos: [
+      "O DubWorks Manager é o painel interno usado para acompanhar projetos, elenco, links, registros e histórico. Ele existe para reduzir bagunça e impedir que informações importantes fiquem perdidas no WhatsApp.",
+      "Ao entrar no sistema, o líder deve acessar a aba Projetos. Nela aparecem os projetos vinculados ao nome ou vínculo do usuário cadastrado.",
+      "Para abrir um projeto, clique na linha dele. A visualização do projeto mostra abas internas: Informações, Elenco, Registros Semanais, Arquivos do Drive, Atividades e Histórico.",
+      "Na aba Informações, ficam os dados principais: nome do projeto, tipo, gênero, prioridade, status, líder, editor, data, capa, observações e outros campos de controle.",
+      "Na aba Elenco, o líder adiciona personagens, informa quem dubla cada personagem, remove personagens incorretos e usa o botão Salvar elenco para gravar a alteração.",
+      "Na aba Registros Semanais, o líder escreve o andamento real do projeto. Exemplo: 'Semana 02: 4 dubladores entregaram, 2 pendentes, edição ainda não iniciada'.",
+      "Na aba Arquivos do Drive, o líder registra os links principais do projeto: pasta principal, cortes/cenas, materiais de personagens e finalizados.",
+      "Na aba Histórico, aparecem alterações importantes feitas no projeto. O histórico ajuda a entender quem alterou algo e quando.",
+      "Sempre que mexer em dados importantes, o líder deve clicar no botão de salvar/atualizar correspondente. Se não salvar, a informação pode ficar só na tela e se perder.",
+      "O líder deve evitar colocar informações soltas em observações quando já existe campo específico para aquilo. Link vai em Drive, andamento vai em Registro Semanal, elenco vai em Elenco.",
+    ],
+    checklist: [
+      "Sabe abrir projeto",
+      "Sabe usar Informações",
+      "Sabe usar Elenco",
+      "Sabe usar Drive",
+      "Sabe usar Registros Semanais",
+      "Sabe conferir Histórico",
+    ],
+    pergunta: {
+      pergunta: "Onde o líder deve registrar o andamento semanal do projeto?",
+      alternativas: [
+        "Apenas no grupo do WhatsApp.",
+        "Na aba Registros Semanais do projeto.",
+        "No nome do projeto.",
+        "Somente no campo de gênero.",
+      ],
+      correta: 1,
+      explicacao:
+        "O andamento deve ficar no sistema, na aba Registros Semanais, para a diretoria conseguir acompanhar.",
+    },
+  },
+  {
+    id: "planejamento",
+    titulo: "4. Planejamento do projeto teste",
+    descricao:
+      "Aprender a planejar um projeto pequeno, rápido e adequado para treinamento de liderança.",
+    conteudos: [
+      "No treinamento, o líder deve organizar um projeto teste. Esse projeto serve para mostrar se ele sabe conduzir uma produção real, mas em tamanho reduzido.",
+      "O projeto teste pode ser uma comic curta, uma cena pequena, um vídeo curto ou um material de aproximadamente 5 minutos.",
+      "Antes de abrir seleção, o líder precisa definir o nome do projeto, tipo, gênero, quantidade de personagens, tempo de duração, prazo de seleção, prazo de entrega e responsável pela edição.",
+      "O líder deve evitar começar projetos grandes no treinamento. Projetos longos exigem mais experiência, mais cobrança e mais risco de abandono.",
+      "Para vídeos e episódios, uma referência inicial é 1 semana para aproximadamente 5 minutos de vídeo. Se houver muita dificuldade, o prazo pode ser ajustado com aprovação.",
+      "Para comics, HQs ou mangás, uma referência inicial é 1 semana para 1 capítulo inteiro, dependendo do tamanho.",
+      "O planejamento precisa ser claro o suficiente para outra pessoa entender o projeto sem precisar perguntar tudo no privado.",
+      "Depois de planejar, o líder deve registrar o projeto no sistema e manter as informações atualizadas.",
+    ],
+    checklist: [
+      "Definiu projeto teste",
+      "Definiu escopo",
+      "Definiu personagens",
+      "Definiu prazos",
+      "Definiu edição",
+      "Registrou no sistema",
+    ],
+    pergunta: {
+      pergunta:
+        "Qual tipo de projeto é mais indicado para treinamento de líder?",
+      alternativas: [
+        "Um projeto enorme com várias temporadas.",
+        "Um projeto pequeno, como comic curta, cena ou vídeo de cerca de 5 minutos.",
+        "Um projeto sem prazo definido.",
+        "Um projeto sem editor e sem pasta organizada.",
+      ],
+      correta: 1,
+      explicacao:
+        "No treinamento, o ideal é um projeto pequeno para avaliar organização, comunicação e entrega.",
+    },
+  },
+  {
+    id: "pastas",
+    titulo: "5. Estrutura de pastas no Drive",
+    descricao:
+      "Aprender a criar e organizar pastas dentro de pastas seguindo o padrão real da DubWorks.",
+    conteudos: [
+      "A organização do Drive é uma das partes mais importantes do trabalho do líder. Uma pasta mal organizada atrasa elenco, editor e diretoria.",
+      "A estrutura oficial da DubWorks é dividida em 3 pastas principais dentro da pasta do projeto: 1 | Seleção, 2 | Projeto e 3 | Finalizado.",
+      "A pasta 1 | Seleção deve guardar tudo que pertence à fase de seleção: falas teste, formulário de seleção, testes enviados e resultado final da seleção.",
+      "A pasta 2 | Projeto deve guardar tudo que pertence à produção em andamento: cortes, cenas, áudios recebidos, materiais de edição, andamento semanal e organização interna do projeto.",
+      "A pasta 3 | Finalizado deve guardar tudo que já está concluído: vídeos finais, créditos, thumbs, renders, capas e arquivos finais do projeto.",
+      "Dentro da pasta 1 | Seleção, as falas teste devem ser claras, curtas e separadas por personagem. O ideal é que cada teste tenha até 30 segundos.",
+      "Os arquivos de teste devem seguir o padrão: [Feminino] Nome, [Masculino] Nome ou [S/Gênero] Nome. Isso ajuda os membros a identificarem personagens e evita confusão.",
+      "Dentro da pasta 2 | Projeto, o líder pode criar subpastas por episódio, semana, cena, parte ou personagem, dependendo do tipo de produção.",
+      "Para episódios, use o padrão: [EP-XX] Semana XX | Parte YY. Exemplo: [EP-01] Semana 01 | Parte 02.",
+      "Para comics/HQs, use o padrão: [CP-XX] Página YY. Exemplo: [CP-01] Página 05.",
+      "Para cenas ou vídeos curtos, use o padrão: [S-XX] Parte YY. Exemplo: [S-01] Parte 03.",
+      "Cada parte de vídeo deve ter aproximadamente 1 minuto, podendo chegar no máximo a 1 minuto e 30 segundos quando necessário.",
+      "Depois de criar as pastas, os links principais devem ser salvos no DubWorks Manager, principalmente pasta principal, cortes/cenas e finalizados.",
+    ],
+    checklist: [
+      "Criou pasta 1 | Seleção",
+      "Criou pasta 2 | Projeto",
+      "Criou pasta 3 | Finalizado",
+      "Organizou falas teste",
+      "Organizou cortes/cenas",
+      "Salvou links no sistema",
+    ],
+    pergunta: {
+      pergunta: "Qual é a estrutura oficial principal de pastas da DubWorks?",
+      alternativas: [
+        "01 - Falas Teste, 02 - Cortes, 03 - Edição e 04 - Materiais.",
+        "1 | Seleção, 2 | Projeto e 3 | Finalizado.",
+        "Teste, Render, Aleatórios e Antigos.",
+        "Somente uma pasta única com todos os arquivos misturados.",
+      ],
+      correta: 1,
+      explicacao:
+        "A estrutura oficial é formada por três pastas principais: 1 | Seleção, 2 | Projeto e 3 | Finalizado.",
+    },
+  },
+  {
+    id: "formularios",
+    titulo: "6. Criação de formulários",
+    descricao:
+      "Aprender a criar formulários para seleção e entrega de falas/vídeos.",
+    conteudos: [
+      "Os formulários são essenciais porque os vídeos, áudios e testes dos membros geralmente são entregues por lá.",
+      "O líder deve criar ou adaptar um formulário para seleção. Esse formulário recebe os testes dos membros interessados nos personagens.",
+      "O formulário de seleção deve ter título claro com o nome do projeto, descrição com prazo, link para falas teste, campo para nome do membro, contato e personagem escolhido.",
+      "Também precisa ter campo de upload para o membro enviar o teste. Se o upload não estiver funcionando, o processo inteiro fica comprometido.",
+      "O líder também deve criar ou adaptar um formulário de entrega. Esse formulário é usado depois da seleção, quando os dubladores oficiais enviam suas falas.",
+      "O formulário de entrega deve pedir nome do membro, personagem, parte/semana, observações e arquivo enviado.",
+      "A descrição do formulário deve explicar o padrão de envio: áudio limpo, sem efeitos desnecessários, nome correto e envio dentro do prazo.",
+      "Antes de divulgar qualquer formulário, o líder precisa testar como se fosse um membro. Isso evita problema de permissão, campo obrigatório faltando ou upload bloqueado.",
+      "Depois que os arquivos chegarem, o líder deve organizar as respostas e mover/identificar os arquivos dentro da pasta correta do Drive.",
+      "Os links dos formulários e pastas importantes devem ser registrados no sistema para a diretoria conseguir consultar.",
+    ],
+    checklist: [
+      "Criou formulário de seleção",
+      "Criou formulário de entrega",
+      "Configurou upload",
+      "Testou envio",
+      "Organizou respostas",
+      "Salvou links",
+    ],
+    pergunta: {
+      pergunta:
+        "O que o líder deve fazer antes de divulgar um formulário para os membros?",
+      alternativas: [
+        "Divulgar rápido sem testar.",
+        "Testar o formulário, verificar campos, prazo, link e upload.",
+        "Pedir para o editor resolver depois.",
+        "Deixar sem campo de upload.",
+      ],
+      correta: 1,
+      explicacao:
+        "O líder precisa testar o formulário antes de divulgar para garantir que o envio funciona corretamente.",
+    },
+  },
+  {
+    id: "avisos",
+    titulo: "7. Avisos e comunicação do projeto",
+    descricao:
+      "Aprender a divulgar seleção, lembretes, encerramento e resultado de forma clara.",
+    conteudos: [
+      "A comunicação do líder precisa ser clara, completa e organizada. Aviso confuso gera dúvidas, atraso e retrabalho.",
+      "O aviso de abertura de seleção deve informar nome do projeto, breve descrição, personagens disponíveis, prazo, link das falas teste, link do formulário e contato do líder/editor.",
+      "O líder precisa conferir se todos os links estão abrindo antes de divulgar. Link quebrado passa impressão de desorganização.",
+      "Durante a seleção, o líder deve enviar lembretes. Exemplos: faltam 3 dias, faltam 2 dias, último dia e seleção encerrada.",
+      "O aviso de encerramento deve informar que o prazo acabou e que os testes serão analisados.",
+      "O resultado da seleção deve listar personagem e dublador escolhido de forma clara.",
+      "Depois do resultado, o líder deve orientar o elenco sobre próximo passo: grupo, prazo de entrega, pasta do projeto e formulário de envio.",
+      "O líder deve evitar discussões públicas, indiretas e cobranças agressivas. Cobrança deve ser firme, mas respeitosa.",
+    ],
+    checklist: [
+      "Criou aviso de abertura",
+      "Incluiu links",
+      "Criou lembretes",
+      "Criou encerramento",
+      "Divulgou resultado",
+      "Orientou próximos passos",
+    ],
+    pergunta: {
+      pergunta: "O que um aviso de abertura de seleção precisa conter?",
+      alternativas: [
+        "Somente o nome do projeto.",
+        "Nome do projeto, prazo, links, personagens e contato do responsável.",
+        "Apenas uma imagem bonita.",
+        "Somente o link do grupo.",
+      ],
+      correta: 1,
+      explicacao:
+        "O aviso precisa ter informações suficientes para o membro entender o projeto e participar sem confusão.",
+    },
+  },
+  {
+    id: "execucao",
+    titulo: "8. Execução do projeto prático",
+    descricao:
+      "Aprender a conduzir um projeto curto sozinho para demonstrar preparo como líder.",
+    conteudos: [
+      "A execução do projeto prático é a parte em que o líder mostra se sabe aplicar o treinamento.",
+      "O projeto deve ser pequeno, como uma comic curta, cena rápida ou vídeo de aproximadamente 5 minutos.",
+      "O líder deve criar o projeto no sistema, organizar as pastas, criar formulários, abrir seleção, definir elenco e acompanhar entregas.",
+      "Durante a execução, o líder precisa observar quem entregou, quem atrasou, quem sumiu e quem precisa ser substituído.",
+      "Se houver atraso, o líder deve cobrar com respeito e registrar no sistema. Se o problema continuar, deve avisar a diretoria.",
+      "O líder precisa manter contato com o editor, porque o projeto não termina quando os áudios chegam. A edição também precisa ser acompanhada.",
+      "Mesmo em projeto curto, o líder deve registrar andamento. Isso mostra maturidade e organização.",
+      "O objetivo do projeto prático não é ser perfeito, mas demonstrar que o líder consegue organizar, conduzir, registrar e finalizar.",
+    ],
+    checklist: [
+      "Criou projeto teste",
+      "Organizou pastas",
+      "Criou formulários",
+      "Selecionou elenco",
+      "Acompanhou entregas",
+      "Registrou andamento",
+      "Enviou finalizado",
+    ],
+    pergunta: {
+      pergunta:
+        "Qual é o objetivo principal do projeto prático no treinamento?",
+      alternativas: [
+        "Fazer o maior projeto possível.",
+        "Mostrar que o líder sabe organizar, conduzir, registrar e finalizar um projeto curto.",
+        "Evitar usar o sistema.",
+        "Deixar tudo para a diretoria resolver.",
+      ],
+      correta: 1,
+      explicacao:
+        "O projeto prático serve para avaliar organização, comunicação, registro e entrega em um projeto pequeno.",
+    },
+  },
+  {
+    id: "resultado",
+    titulo: "9. Upload do resultado no sistema",
+    descricao:
+      "Aprender a registrar o resultado final e os links corretos dentro do DubWorks Manager.",
+    conteudos: [
+      "Quando o projeto tiver resultado ou material finalizado, o líder precisa organizar esse material no Drive e registrar o link no sistema.",
+      "O resultado pode ser vídeo final, render, pasta finalizada, créditos, thumb/capa ou arquivo editado.",
+      "O material final deve ficar dentro da pasta 3 | Finalizado, para que a diretoria e equipe encontrem rapidamente.",
+      "No DubWorks Manager, o líder deve colocar os links na aba Arquivos do Drive.",
+      "Depois de colar os links, o líder precisa clicar para salvar. Se não salvar, a informação pode sumir ao recarregar.",
+      "Depois de salvar, o líder deve conferir se o histórico registrou a ação ou se a informação ficou visível no projeto.",
+      "Na aba Registros Semanais, o líder deve escrever algo como: 'Projeto finalizado e link salvo na pasta Finalizado'.",
+      "A diretoria precisa abrir o projeto e encontrar o caminho do material final sem procurar em conversa antiga.",
+      "Um projeto não deve ser considerado encerrado se os arquivos finais não estão organizados e registrados.",
+    ],
+    checklist: [
+      "Organizou finalizado",
+      "Salvou link no sistema",
+      "Registrou entrega",
+      "Conferiu histórico",
+      "Diretoria consegue acessar",
+    ],
+    pergunta: {
+      pergunta: "Onde o líder deve guardar e registrar o material finalizado?",
+      alternativas: [
+        "Apenas no WhatsApp.",
+        "Na pasta 3 | Finalizado e nos links do DubWorks Manager.",
+        "Em qualquer pasta pessoal sem avisar.",
+        "Somente no computador do editor.",
+      ],
+      correta: 1,
+      explicacao:
+        "O material final precisa ficar organizado no Drive e com link registrado no sistema.",
+    },
+  },
+  {
+    id: "prova-final",
+    titulo: "10. Prova final do líder",
+    descricao:
+      "Responder perguntas de revisão geral para concluir a parte teórica do treinamento.",
+    conteudos: [
+      "A prova final serve para revisar tudo que foi aprendido: função do líder, sistema, pastas, formulários, avisos, execução e finalização.",
+      "A prova não substitui a avaliação prática. Ela confirma se o líder entendeu o processo antes de ser avaliado pela diretoria.",
+      "O líder deve responder com atenção. Se errar, deve voltar ao módulo correspondente e revisar o conteúdo.",
+      "A diretoria pode usar o resultado da prova junto com o projeto prático para decidir se o líder está aprovado.",
+    ],
+    checklist: [
+      "Revisou todos os módulos",
+      "Respondeu a prova final",
+      "Corrigiu pontos fracos",
+    ],
+    pergunta: {
+      pergunta: "Para um líder ser aprovado, o que deve ser considerado?",
+      alternativas: [
+        "Somente simpatia no grupo.",
+        "Apenas responder a prova, sem projeto prático.",
+        "Leitura, prova, organização prática, uso do sistema, comunicação e entrega do projeto teste.",
+        "Só criar uma pasta no Drive.",
+      ],
+      correta: 2,
+      explicacao:
+        "A aprovação deve considerar teoria e prática: prova, organização, comunicação, sistema e entrega.",
+    },
+  },
+  {
+    id: "avaliacao",
+    titulo: "11. Avaliação final da diretoria",
+    descricao:
+      "A diretoria avalia se o líder em treinamento pode virar líder oficial.",
+    conteudos: [
+      "A avaliação final deve considerar o comportamento do líder durante todo o treinamento.",
+      "A diretoria deve observar se o líder conseguiu entender o papel, organizar pastas, criar formulários, usar o sistema, abrir seleção, acompanhar entregas e registrar andamento.",
+      "Também deve ser considerada a postura: comunicação, respeito, responsabilidade, capacidade de resolver problemas e pedir ajuda quando necessário.",
+      "O líder pode ser aprovado, reprovado, pausado ou mantido em atenção.",
+      "Se aprovado, o usuário pode deixar de ser líder em treinamento e virar líder oficial.",
+      "Se reprovado, ele pode refazer módulos, repetir o projeto prático ou continuar em acompanhamento.",
+      "A aprovação não deve ser baseada apenas em leitura. O líder precisa demonstrar prática.",
+    ],
+    checklist: [
+      "Diretoria avaliou teoria",
+      "Diretoria avaliou prática",
+      "Diretoria avaliou comunicação",
+      "Diretoria avaliou organização",
+      "Status final foi definido",
+    ],
+    pergunta: {
+      pergunta:
+        "O que a diretoria deve avaliar antes de transformar alguém em líder oficial?",
+      alternativas: [
+        "Apenas se a pessoa pediu para virar líder.",
+        "Organização, comunicação, uso do sistema, projeto prático e responsabilidade.",
+        "Somente se a pessoa marcou todos os checkboxes.",
+        "Apenas se ela gosta do projeto.",
+      ],
+      correta: 1,
+      explicacao:
+        "A diretoria deve avaliar o conjunto: postura, prática, organização, comunicação e uso correto do sistema.",
+    },
+  },
+];
+
 const projetoVazio: Projeto = {
   ID: "",
   Projeto: "",
@@ -234,7 +669,11 @@ function permissaoPadraoPorCargo(cargo: Cargo, chave: ChavePermissao) {
     return ["acesso_usuarios", "acesso_treinamentos"].includes(chave);
   }
 
-  if (cargo === "lider" || cargo === "lider_treinamento") {
+  if (cargo === "lider_treinamento") {
+    return ["acesso_treinamentos"].includes(chave);
+  }
+
+  if (cargo === "lider") {
     return [
       "acesso_projetos",
       "acesso_relatorios_elenco",
@@ -280,8 +719,12 @@ function podeVerProjeto(usuario: Usuario | null, projeto: Projeto) {
     return true;
   }
 
-  if (cargo === "lider" || cargo === "lider_treinamento") {
+  if (cargo === "lider") {
     return lider === vinculo || lider === login || lider === nome;
+  }
+
+  if (cargo === "lider_treinamento") {
+    return false;
   }
 
   if (cargo === "editor") {
@@ -302,8 +745,12 @@ function podeEditarProjeto(usuario: Usuario | null, projeto: Projeto | null) {
 
   if (cargo === "diretoria" || cargo === "adm") return true;
 
-  if (cargo === "lider" || cargo === "lider_treinamento") {
+  if (cargo === "lider") {
     return lider === vinculo || lider === login || lider === nome;
+  }
+
+  if (cargo === "lider_treinamento") {
+    return false;
   }
 
   return false;
@@ -311,11 +758,7 @@ function podeEditarProjeto(usuario: Usuario | null, projeto: Projeto | null) {
 
 function podeCriarProjeto(usuario: Usuario | null) {
   if (!usuario) return false;
-  return (
-    ["diretoria", "adm", "lider", "lider_treinamento"].indexOf(
-      usuario.cargo
-    ) !== -1
-  );
+  return ["diretoria", "adm", "lider"].indexOf(usuario.cargo) !== -1;
 }
 
 function podeSubirVideoEditor(
@@ -347,6 +790,11 @@ function podeGerenciarMembros(usuario: Usuario | null) {
 
 function podeGerenciarTreinamentos(usuario: Usuario | null) {
   return temAcesso(usuario, "acesso_treinamentos");
+}
+
+function podeVerNotificacoesGerais(usuario: Usuario | null) {
+  if (!usuario) return false;
+  return usuario.cargo === "diretoria" || usuario.cargo === "adm";
 }
 
 function podeExcluirUsuario(usuarioLogado: Usuario | null, alvo: Usuario) {
@@ -474,6 +922,66 @@ function mapMembroDb(item: any): Membro {
     data_saida: item.data_saida || null,
     observacao: item.observacao || "",
   };
+}
+
+async function salvarRespostaTreinamentoBanco(
+  resposta: RespostaTreinamento
+): Promise<boolean> {
+  const { error } = await supabase.from("treinamento_respostas").insert([
+    {
+      usuario_login: resposta.usuario_login,
+      usuario_nome: resposta.usuario_nome,
+      usuario_cargo: resposta.usuario_cargo,
+      modulo_id: resposta.modulo_id,
+      modulo_titulo: resposta.modulo_titulo,
+      pergunta: resposta.pergunta,
+      alternativa_marcada: resposta.alternativa_marcada,
+      alternativa_texto: resposta.alternativa_texto,
+      alternativa_correta: resposta.alternativa_correta,
+      correta: resposta.correta,
+      explicacao: resposta.explicacao,
+    },
+  ]);
+
+  if (error) {
+    console.error(
+      "Erro ao salvar resposta do treinamento. Confira se a tabela treinamento_respostas foi criada no Supabase:",
+      error
+    );
+    return false;
+  }
+
+  return true;
+}
+
+async function carregarRespostasTreinamentoBanco(): Promise<
+  RespostaTreinamento[]
+> {
+  const { data, error } = await supabase
+    .from("treinamento_respostas")
+    .select("*")
+    .order("data_resposta", { ascending: false });
+
+  if (error) {
+    console.error("Erro ao buscar respostas do treinamento:", error);
+    return [];
+  }
+
+  return (data || []).map((item: any) => ({
+    id: item.id,
+    usuario_login: item.usuario_login || "",
+    usuario_nome: item.usuario_nome || "",
+    usuario_cargo: item.usuario_cargo || "",
+    modulo_id: item.modulo_id || "",
+    modulo_titulo: item.modulo_titulo || "",
+    pergunta: item.pergunta || "",
+    alternativa_marcada: Number(item.alternativa_marcada ?? -1),
+    alternativa_texto: item.alternativa_texto || "",
+    alternativa_correta: Number(item.alternativa_correta ?? -1),
+    correta: Boolean(item.correta),
+    explicacao: item.explicacao || "",
+    data_resposta: item.data_resposta || null,
+  }));
 }
 
 async function carregarUsuariosBanco(): Promise<Usuario[]> {
@@ -913,6 +1421,29 @@ export default function App() {
   >("consultas");
   const [mostrarCentralAjuda, setMostrarCentralAjuda] = useState(false);
   const [mostrarRelatorios, setMostrarRelatorios] = useState(false);
+  const [mostrarTreinamentos, setMostrarTreinamentos] = useState(false);
+  const [moduloTreinamentoAtivo, setModuloTreinamentoAtivo] =
+    useState("papel-lider");
+  const [checklistTreinamento, setChecklistTreinamento] = useState<
+    Record<string, boolean>
+  >({});
+  const [respostasTreinamento, setRespostasTreinamento] = useState<
+    Record<string, number>
+  >({});
+  const [respostasTreinamentoSalvas, setRespostasTreinamentoSalvas] = useState<
+    RespostaTreinamento[]
+  >([]);
+  const [carregandoRespostasTreinamento, setCarregandoRespostasTreinamento] =
+    useState(false);
+  const [mostrarResultadosTreinamento, setMostrarResultadosTreinamento] =
+    useState(false);
+  const [avaliacaoLider, setAvaliacaoLider] = useState({
+    lider: "",
+    projeto: "",
+    nota: "10",
+    status: "em_treinamento",
+    observacoes: "",
+  });
   const [mostrarArquivados, setMostrarArquivados] = useState(false);
   const [queryMembros, setQueryMembros] = useState("");
   const [membroSelecionadoId, setMembroSelecionadoId] = useState<number | null>(
@@ -1265,6 +1796,88 @@ export default function App() {
     (u) => u.cargo === "lider_treinamento"
   ).length;
 
+  const moduloSelecionadoTreinamento =
+    modulosTreinamentoLider.find((m) => m.id === moduloTreinamentoAtivo) ||
+    modulosTreinamentoLider[0];
+
+  const totalPerguntasTreinamento = modulosTreinamentoLider.filter(
+    (modulo) => modulo.pergunta
+  ).length;
+
+  const respostasCorretasTreinamento = modulosTreinamentoLider.filter(
+    (modulo) =>
+      modulo.pergunta &&
+      respostasTreinamento[modulo.id] === modulo.pergunta.correta
+  ).length;
+
+  const progressoTreinamento = totalPerguntasTreinamento
+    ? Math.round(
+        (respostasCorretasTreinamento / totalPerguntasTreinamento) * 100
+      )
+    : 0;
+
+  function responderPerguntaTreinamento(
+    moduloId: string,
+    alternativaIndex: number
+  ) {
+    setRespostasTreinamento((atual) => ({
+      ...atual,
+      [moduloId]: alternativaIndex,
+    }));
+  }
+
+  async function recarregarRespostasTreinamento() {
+    if (!usuarioLogado) return;
+    if (!podeGerenciarTreinamentos(usuarioLogado)) return;
+
+    try {
+      setCarregandoRespostasTreinamento(true);
+      const lista = await carregarRespostasTreinamentoBanco();
+      setRespostasTreinamentoSalvas(lista);
+    } catch (err) {
+      console.error("Erro ao carregar respostas do treinamento:", err);
+    } finally {
+      setCarregandoRespostasTreinamento(false);
+    }
+  }
+
+  async function enviarRespostaTreinamento(modulo: ModuloTreinamento) {
+    if (!usuarioLogado || !modulo.pergunta) return;
+
+    const alternativaMarcada = respostasTreinamento[modulo.id];
+
+    if (alternativaMarcada === undefined) {
+      alert("Escolha uma alternativa antes de enviar.");
+      return;
+    }
+
+    const resposta: RespostaTreinamento = {
+      usuario_login: usuarioLogado.login,
+      usuario_nome: usuarioLogado.nome,
+      usuario_cargo: usuarioLogado.cargo,
+      modulo_id: modulo.id,
+      modulo_titulo: modulo.titulo,
+      pergunta: modulo.pergunta.pergunta,
+      alternativa_marcada: alternativaMarcada,
+      alternativa_texto: modulo.pergunta.alternativas[alternativaMarcada] || "",
+      alternativa_correta: modulo.pergunta.correta,
+      correta: alternativaMarcada === modulo.pergunta.correta,
+      explicacao: modulo.pergunta.explicacao,
+    };
+
+    const ok = await salvarRespostaTreinamentoBanco(resposta);
+
+    if (!ok) {
+      alert(
+        "Não consegui salvar a resposta. Confira se a tabela treinamento_respostas existe no Supabase."
+      );
+      return;
+    }
+
+    alert("Resposta enviada para avaliação da diretoria.");
+    await recarregarRespostasTreinamento();
+  }
+
   async function fazerLogin(e: React.FormEvent) {
     e.preventDefault();
 
@@ -1399,7 +2012,19 @@ export default function App() {
           : novoProjeto.Lider,
     };
 
-    const projetoId = await criarProjetoBanco(projetoParaSalvar);
+    const projetoParaSalvarComHistorico: Projeto = {
+      ...projetoParaSalvar,
+      Registro_Semanal: [
+        projetoParaSalvar.Registro_Semanal || "",
+        `[${new Date().toLocaleString("pt-BR")}] ${
+          usuarioLogado.nome
+        }: Criou o projeto.`,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+    };
+
+    const projetoId = await criarProjetoBanco(projetoParaSalvarComHistorico);
     if (!projetoId) {
       alert("Erro ao salvar no banco.");
       return;
@@ -1407,7 +2032,7 @@ export default function App() {
 
     const elencoOk = await salvarElencoProjetoBanco(
       projetoId,
-      projetoParaSalvar.Elenco
+      projetoParaSalvarComHistorico.Elenco
     );
 
     if (!elencoOk) alert("Projeto salvo, mas houve erro ao salvar o elenco.");
@@ -1419,6 +2044,142 @@ export default function App() {
     alert("Projeto salvo no banco 🚀");
   }
 
+  function registrarHistoricoProjeto(texto: string) {
+    if (!rascunho) return;
+
+    const agora = new Date().toLocaleString("pt-BR");
+    const autor = usuarioLogado?.nome || "Sistema";
+    const linha = `[${agora}] ${autor}: ${texto}`;
+
+    setRascunho({
+      ...rascunho,
+      Registro_Semanal: [rascunho.Registro_Semanal || "", linha]
+        .filter(Boolean)
+        .join("\n"),
+    });
+  }
+
+  async function salvarLinksDriveComHistorico() {
+    if (!rascunho || !projetoPainel) return;
+
+    const linksAtuais = extrairLinksDrive(rascunho.Observacoes);
+    const linksAntigos = extrairLinksDrive(projetoPainel.Observacoes);
+
+    const alterados: string[] = [];
+
+    if ((linksAtuais.pasta || "") !== (linksAntigos.pasta || "")) {
+      alterados.push("Pasta Principal");
+    }
+
+    if ((linksAtuais.videos || "") !== (linksAntigos.videos || "")) {
+      alterados.push("Vídeos dos Personagens");
+    }
+
+    if ((linksAtuais.cortes || "") !== (linksAntigos.cortes || "")) {
+      alterados.push("Cortes / Cenas");
+    }
+
+    if ((linksAtuais.finalizados || "") !== (linksAntigos.finalizados || "")) {
+      alterados.push("Finalizados");
+    }
+
+    if (alterados.length) {
+      const agora = new Date().toLocaleString("pt-BR");
+      const autor = usuarioLogado?.nome || "Sistema";
+      const linha = `[${agora}] ${autor}: Atualizou links do Drive (${alterados.join(
+        ", "
+      )}).`;
+
+      const projetoComHistorico: Projeto = aplicarHistoricoAutomatico(
+        projetoPainel,
+        rascunho,
+        `atualizou links do Drive (${alterados.join(", ")})`
+      );
+
+      setRascunho(projetoComHistorico);
+
+      const ok = await atualizarProjetoBanco(projetoComHistorico);
+
+      if (!ok) {
+        alert("Erro ao salvar os links no banco.");
+        return;
+      }
+
+      await recarregarProjetos();
+      alert("Links salvos e histórico registrado.");
+      return;
+    }
+
+    await salvarAlteracoes();
+  }
+
+  function descreverAlteracoesProjeto(antes: Projeto, depois: Projeto) {
+    const alteracoes: string[] = [];
+
+    const campos: { chave: keyof Projeto; label: string }[] = [
+      { chave: "Projeto", label: "nome do projeto" },
+      { chave: "Tipo", label: "tipo" },
+      { chave: "Genero", label: "gênero" },
+      { chave: "Prioridade", label: "prioridade" },
+      { chave: "Dupla", label: "dupla" },
+      { chave: "Lider", label: "líder" },
+      { chave: "Telefone_Lider", label: "telefone do líder" },
+      { chave: "Editor", label: "editor" },
+      { chave: "Telefone_Editor", label: "telefone do editor" },
+      { chave: "Status", label: "status" },
+      { chave: "Data_Inicio", label: "data de início" },
+      { chave: "Video_Editor_Link", label: "link do vídeo do editor" },
+      { chave: "Capa_URL", label: "capa do projeto" },
+      { chave: "Observacoes", label: "observações/links do Drive" },
+    ];
+
+    campos.forEach((campo) => {
+      const valorAntes = String((antes as any)[campo.chave] || "").trim();
+      const valorDepois = String((depois as any)[campo.chave] || "").trim();
+
+      if (valorAntes !== valorDepois) {
+        alteracoes.push(campo.label);
+      }
+    });
+
+    const elencoAntes = (antes.Elenco || [])
+      .map((item) => `${item.personagem}|${item.dublador}|${item.funcao}`)
+      .join(";;");
+
+    const elencoDepois = (depois.Elenco || [])
+      .map((item) => `${item.personagem}|${item.dublador}|${item.funcao}`)
+      .join(";;");
+
+    if (elencoAntes !== elencoDepois) {
+      alteracoes.push("elenco");
+    }
+
+    return alteracoes;
+  }
+
+  function aplicarHistoricoAutomatico(
+    projetoAntes: Projeto,
+    projetoDepois: Projeto,
+    acaoManual?: string
+  ) {
+    const alteracoes = acaoManual
+      ? [acaoManual]
+      : descreverAlteracoesProjeto(projetoAntes, projetoDepois);
+
+    if (!alteracoes.length) return projetoDepois;
+
+    const agora = new Date().toLocaleString("pt-BR");
+    const autor = usuarioLogado?.nome || "Sistema";
+    const linha = `[${agora}] ${autor}: Atualizou ${alteracoes.join(", ")}.`;
+
+    return {
+      ...projetoDepois,
+      Registro_Semanal: [projetoDepois.Registro_Semanal || "", linha]
+        .filter(Boolean)
+        .join("\n"),
+    };
+  }
+
   async function salvarAlteracoes() {
     if (!rascunho || !selecionado || !usuarioLogado) return;
 
@@ -1427,11 +2188,16 @@ export default function App() {
     if (!podeEditar && !podeVideo) return;
 
     if (!podeEditar && podeVideo) {
-      const projetoVideo: Projeto = {
+      const projetoVideoBase: Projeto = {
         ...selecionado,
         Video_Editor_Link: rascunho.Video_Editor_Link || "",
         Observacoes: rascunho.Observacoes || "",
       };
+
+      const projetoVideo = aplicarHistoricoAutomatico(
+        selecionado,
+        projetoVideoBase
+      );
 
       const ok = await atualizarProjetoBanco(projetoVideo);
       if (!ok) {
@@ -1453,15 +2219,20 @@ export default function App() {
           : rascunho.Lider,
     };
 
-    const projetoOk = await atualizarProjetoBanco(projetoFinal);
+    const projetoFinalComHistorico = aplicarHistoricoAutomatico(
+      selecionado,
+      projetoFinal
+    );
+
+    const projetoOk = await atualizarProjetoBanco(projetoFinalComHistorico);
     if (!projetoOk) {
       alert("Erro ao salvar o projeto no banco.");
       return;
     }
 
     const elencoOk = await salvarElencoProjetoBanco(
-      projetoFinal.ID,
-      projetoFinal.Elenco.filter(
+      projetoFinalComHistorico.ID,
+      projetoFinalComHistorico.Elenco.filter(
         (item) => item.personagem.trim() || item.dublador.trim()
       )
     );
@@ -1472,6 +2243,51 @@ export default function App() {
 
     await recarregarProjetos();
     alert("Alterações salvas com sucesso.");
+  }
+
+  async function salvarElencoAtual() {
+    if (!rascunho || !selecionado || !usuarioLogado) return;
+
+    if (!podeEditarProjeto(usuarioLogado, selecionado)) {
+      alert("Você não tem permissão para alterar o elenco deste projeto.");
+      return;
+    }
+
+    const elencoFiltrado = (rascunho.Elenco || []).filter(
+      (item) => item.personagem.trim() || item.dublador.trim()
+    );
+
+    const projetoComElenco: Projeto = {
+      ...rascunho,
+      Elenco: elencoFiltrado,
+    };
+
+    const projetoComHistorico = aplicarHistoricoAutomatico(
+      selecionado,
+      projetoComElenco,
+      "atualizou o elenco"
+    );
+
+    const projetoOk = await atualizarProjetoBanco(projetoComHistorico);
+
+    if (!projetoOk) {
+      alert("Erro ao salvar o projeto no banco.");
+      return;
+    }
+
+    const elencoOk = await salvarElencoProjetoBanco(
+      projetoComHistorico.ID,
+      projetoComHistorico.Elenco
+    );
+
+    if (!elencoOk) {
+      alert("Projeto salvo, mas houve erro ao salvar o elenco.");
+      return;
+    }
+
+    setRascunho(projetoComHistorico);
+    await recarregarProjetos();
+    alert("Elenco salvo com sucesso.");
   }
 
   async function criarUsuario() {
@@ -1615,6 +2431,14 @@ export default function App() {
     const acao = arquivado ? "arquivar" : "reativar";
     const confirmar = confirm(`Tem certeza que deseja ${acao} este projeto?`);
     if (!confirmar) return;
+
+    const projetoComHistoricoArquivamento: Projeto = aplicarHistoricoAutomatico(
+      selecionado,
+      { ...selecionado, Arquivado: arquivado },
+      arquivado ? "arquivou o projeto" : "reativou o projeto"
+    );
+
+    await atualizarProjetoBanco(projetoComHistoricoArquivamento);
 
     const ok = await atualizarArquivamentoProjetoBanco(
       selecionado.ID,
@@ -1762,6 +2586,16 @@ export default function App() {
     setUsuarios((lista) =>
       lista.map((u) => (u.id === alvo.id ? { ...u, [chave]: valor } : u))
     );
+  }
+
+  function abrirTelaTreinamentos() {
+    setMostrarTreinamentos(true);
+    setMostrarMembros(false);
+    setMostrarUsuarios(false);
+    setMostrarRelatorios(false);
+    setMostrarNovoProjeto(false);
+    setSelecionadoId(null);
+    setRascunho(null);
   }
 
   function exportarProjetosCSV() {
@@ -2232,7 +3066,9 @@ export default function App() {
     );
   }
 
-  const telaAtual = mostrarMembros
+  const telaAtual = mostrarTreinamentos
+    ? "treinamentos"
+    : mostrarMembros
     ? "membros"
     : mostrarUsuarios
     ? "usuarios"
@@ -2289,12 +3125,12 @@ export default function App() {
 
   const historicoProjetoDemo = [
     {
-      usuario: "Uta",
+      usuario: "Sistema",
       acao: "alterou o link da pasta principal",
       data: "Hoje, 14:20",
     },
     {
-      usuario: "Uta",
+      usuario: "Sistema",
       acao: "incluiu um novo teste de vídeo",
       data: "Hoje, 13:05",
     },
@@ -2311,32 +3147,51 @@ export default function App() {
   // Exemplo:
   // criar projeto, alterar link, enviar relatório, adicionar elenco etc.
 
-  const notificacoesDiretoriaDemo = [
-    {
-      usuario: "Uta",
-      acao: "finalizou um projeto",
-      data: "Hoje, 15:10",
-      tipo: "Finalização",
-    },
-    {
-      usuario: "Uta",
-      acao: "abriu um novo projeto",
-      data: "Hoje, 12:30",
-      tipo: "Novo projeto",
-    },
-    {
-      usuario: "Uta",
-      acao: "enviou o relatório semanal",
-      data: "Ontem, 20:15",
-      tipo: "Relatório",
-    },
-    {
-      usuario: "Uta",
-      acao: "adicionou um novo membro ao elenco",
-      data: "Ontem, 17:04",
-      tipo: "Elenco",
-    },
-  ];
+  const notificacoesProjeto = projetoPainel
+    ? [
+        {
+          usuario: usuarioLogado?.nome || "Sistema",
+          acao: `acessou/atualizou o projeto ${projetoPainel.Projeto}`,
+          data: new Date().toLocaleString("pt-BR"),
+          tipo: "Projeto",
+          projetoId: projetoPainel.ID,
+          lider: projetoPainel.Lider,
+          editor: projetoPainel.Editor,
+        },
+      ].filter((notificacao) => {
+        if (!usuarioLogado || !projetoPainel) return false;
+
+        if (
+          usuarioLogado.cargo === "diretoria" ||
+          usuarioLogado.cargo === "adm"
+        ) {
+          return notificacao.projetoId === projetoPainel.ID;
+        }
+
+        const vinculo = normalizar(
+          usuarioLogado.vinculo || usuarioLogado.nome || usuarioLogado.login
+        );
+
+        if (
+          usuarioLogado.cargo === "lider" ||
+          usuarioLogado.cargo === "lider_treinamento"
+        ) {
+          return (
+            notificacao.projetoId === projetoPainel.ID &&
+            normalizar(notificacao.lider) === vinculo
+          );
+        }
+
+        if (usuarioLogado.cargo === "editor") {
+          return (
+            notificacao.projetoId === projetoPainel.ID &&
+            normalizar(notificacao.editor) === vinculo
+          );
+        }
+
+        return false;
+      })
+    : [];
 
   function abrirLink(link?: string) {
     if (!link) {
@@ -2780,7 +3635,10 @@ export default function App() {
         </div>
 
         {projetoPainel && podeEditarProjeto(usuarioLogado, projetoPainel) && (
-          <button onClick={salvarAlteracoes} style={botaoPrimarioStyle}>
+          <button
+            onClick={salvarLinksDriveComHistorico}
+            style={botaoPrimarioStyle}
+          >
             Salvar links
           </button>
         )}
@@ -3505,6 +4363,471 @@ export default function App() {
     </div>
   );
 
+  const cardDarkStyle: React.CSSProperties = {
+    padding: 18,
+    borderRadius: 18,
+    border: "1px solid rgba(148,163,184,.22)",
+    background: "rgba(15,23,42,.72)",
+    boxShadow: "0 18px 45px rgba(0,0,0,.18)",
+  };
+
+  const TrainingPage = () => (
+    <div style={{ display: "grid", gap: 18 }}>
+      <div style={pageHeaderDarkStyle}>
+        <div>
+          <div style={breadcrumbDarkStyle}>
+            Treinamentos › Formação de Líderes
+          </div>
+          <h1 style={pageTitleDarkStyle}>Treinamento de Líderes</h1>
+          <p style={{ color: "#94a3b8", margin: 0 }}>
+            Área interna para formar, acompanhar e avaliar líderes de projetos
+            da DubWorks.
+          </p>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+          {podeGerenciarTreinamentos(usuarioLogado) && (
+            <button
+              onClick={() => {
+                setMostrarResultadosTreinamento(!mostrarResultadosTreinamento);
+                recarregarRespostasTreinamento();
+              }}
+              style={botaoSecundarioGrandeStyle}
+            >
+              {mostrarResultadosTreinamento
+                ? "Ver módulos"
+                : "Resultados das respostas"}
+            </button>
+          )}
+
+          <button
+            onClick={() => {
+              setMostrarTreinamentos(false);
+              setMostrarRelatorios(false);
+              setMostrarUsuarios(false);
+              setMostrarMembros(false);
+            }}
+            style={botaoSecundarioGrandeStyle}
+          >
+            Voltar aos projetos
+          </button>
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: isTablet ? "1fr" : "repeat(4, 1fr)",
+          gap: 14,
+        }}
+      >
+        <div style={cardDarkStyle}>
+          <div style={{ color: "#94a3b8" }}>Progresso geral</div>
+          <strong style={{ fontSize: 34, color: "#f8fafc" }}>
+            {progressoTreinamento}%
+          </strong>
+        </div>
+        <div style={cardDarkStyle}>
+          <div style={{ color: "#94a3b8" }}>Módulos</div>
+          <strong style={{ fontSize: 34, color: "#f8fafc" }}>
+            {modulosTreinamentoLider.length}
+          </strong>
+        </div>
+        <div style={cardDarkStyle}>
+          <div style={{ color: "#94a3b8" }}>Questões corretas</div>
+          <strong style={{ fontSize: 34, color: "#f8fafc" }}>
+            {respostasCorretasTreinamento}/{totalPerguntasTreinamento}
+          </strong>
+        </div>
+        <div style={cardDarkStyle}>
+          <div style={{ color: "#94a3b8" }}>Status</div>
+          <strong style={{ fontSize: 22, color: "#38bdf8" }}>
+            {progressoTreinamento >= 100 ? "Concluído" : "Em andamento"}
+          </strong>
+        </div>
+      </div>
+
+      {mostrarResultadosTreinamento &&
+      podeGerenciarTreinamentos(usuarioLogado) ? (
+        <div style={painelDarkStyle}>
+          <h2 style={tituloCardDarkStyle}>Resultados do treinamento</h2>
+          <p style={{ color: "#94a3b8" }}>
+            Aqui a diretoria acompanha as respostas enviadas pelos líderes em
+            treinamento.
+          </p>
+
+          <button
+            type="button"
+            onClick={recarregarRespostasTreinamento}
+            style={botaoSecundarioGrandeStyle}
+          >
+            Atualizar respostas
+          </button>
+
+          <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
+            {carregandoRespostasTreinamento && (
+              <p style={{ color: "#94a3b8" }}>Carregando respostas...</p>
+            )}
+
+            {!carregandoRespostasTreinamento &&
+              respostasTreinamentoSalvas.length === 0 && (
+                <p style={{ color: "#94a3b8" }}>
+                  Nenhuma resposta enviada ainda.
+                </p>
+              )}
+
+            {!carregandoRespostasTreinamento &&
+              respostasTreinamentoSalvas.map((resposta) => (
+                <div
+                  key={`${resposta.id || resposta.usuario_login}-${
+                    resposta.modulo_id
+                  }-${resposta.data_resposta}`}
+                  style={{
+                    padding: 16,
+                    borderRadius: 16,
+                    border: resposta.correta
+                      ? "1px solid rgba(34,197,94,.35)"
+                      : "1px solid rgba(248,113,113,.35)",
+                    background: resposta.correta
+                      ? "rgba(34,197,94,.08)"
+                      : "rgba(248,113,113,.08)",
+                    display: "grid",
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ color: "#f8fafc", fontWeight: 900 }}>
+                    {resposta.usuario_nome || resposta.usuario_login} •{" "}
+                    {resposta.modulo_titulo}
+                  </div>
+
+                  <div style={{ color: "#94a3b8" }}>
+                    {resposta.data_resposta
+                      ? new Date(resposta.data_resposta).toLocaleString("pt-BR")
+                      : "Sem data registrada"}
+                  </div>
+
+                  <div style={{ color: "#cbd5e1" }}>
+                    <strong>Pergunta:</strong> {resposta.pergunta}
+                  </div>
+
+                  <div style={{ color: "#cbd5e1" }}>
+                    <strong>Resposta marcada:</strong>{" "}
+                    {String.fromCharCode(65 + resposta.alternativa_marcada)}){" "}
+                    {resposta.alternativa_texto}
+                  </div>
+
+                  <div
+                    style={{
+                      color: resposta.correta ? "#86efac" : "#fca5a5",
+                      fontWeight: 900,
+                    }}
+                  >
+                    {resposta.correta ? "Correta" : "Incorreta"}
+                  </div>
+
+                  <div style={{ color: "#94a3b8" }}>
+                    <strong>Explicação:</strong> {resposta.explicacao}
+                  </div>
+                </div>
+              ))}
+          </div>
+        </div>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isTablet ? "1fr" : "340px 1fr",
+            gap: 18,
+          }}
+        >
+          <div style={painelDarkStyle}>
+            <h2 style={tituloCardDarkStyle}>Módulos do treinamento</h2>
+            <div style={{ display: "grid", gap: 10, marginTop: 16 }}>
+              {modulosTreinamentoLider.map((modulo) => (
+                <button
+                  key={modulo.id}
+                  type="button"
+                  onClick={() => setModuloTreinamentoAtivo(modulo.id)}
+                  style={{
+                    textAlign: "left",
+                    padding: "14px 16px",
+                    borderRadius: 14,
+                    border:
+                      moduloTreinamentoAtivo === modulo.id
+                        ? "1px solid rgba(56,189,248,.65)"
+                        : "1px solid rgba(148,163,184,.18)",
+                    background:
+                      moduloTreinamentoAtivo === modulo.id
+                        ? "rgba(14,165,233,.16)"
+                        : "rgba(15,23,42,.42)",
+                    color: "#f8fafc",
+                    cursor: "pointer",
+                    fontWeight: 800,
+                  }}
+                >
+                  {modulo.titulo}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div style={painelDarkStyle}>
+            <h2 style={tituloCardDarkStyle}>
+              {moduloSelecionadoTreinamento.titulo}
+            </h2>
+            <p style={{ color: "#94a3b8", fontSize: 16 }}>
+              {moduloSelecionadoTreinamento.descricao}
+            </p>
+
+            <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
+              <h3 style={{ color: "#f8fafc", margin: 0 }}>Conteúdo</h3>
+              {moduloSelecionadoTreinamento.conteudos.map((item, index) => (
+                <div
+                  key={index}
+                  style={{
+                    padding: 14,
+                    borderRadius: 14,
+                    border: "1px solid rgba(148,163,184,.18)",
+                    background: "rgba(2,6,23,.34)",
+                    color: "#cbd5e1",
+                  }}
+                >
+                  {item}
+                </div>
+              ))}
+            </div>
+
+            {moduloSelecionadoTreinamento.pergunta && (
+              <div style={{ display: "grid", gap: 12, marginTop: 24 }}>
+                <h3 style={{ color: "#f8fafc", margin: 0 }}>
+                  Pergunta para concluir o módulo
+                </h3>
+
+                <div
+                  style={{
+                    padding: 16,
+                    borderRadius: 16,
+                    border: "1px solid rgba(56,189,248,.25)",
+                    background: "rgba(14,165,233,.10)",
+                    color: "#f8fafc",
+                    fontWeight: 800,
+                  }}
+                >
+                  {moduloSelecionadoTreinamento.pergunta.pergunta}
+                </div>
+
+                {moduloSelecionadoTreinamento.pergunta.alternativas.map(
+                  (alternativa, index) => {
+                    const selecionada =
+                      respostasTreinamento[moduloSelecionadoTreinamento.id] ===
+                      index;
+                    const correta =
+                      moduloSelecionadoTreinamento.pergunta?.correta === index;
+                    const respondida =
+                      respostasTreinamento[moduloSelecionadoTreinamento.id] !==
+                      undefined;
+
+                    return (
+                      <button
+                        key={`${moduloSelecionadoTreinamento.id}-${index}`}
+                        type="button"
+                        onClick={() =>
+                          responderPerguntaTreinamento(
+                            moduloSelecionadoTreinamento.id,
+                            index
+                          )
+                        }
+                        style={{
+                          textAlign: "left",
+                          padding: 16,
+                          borderRadius: 16,
+                          cursor: "pointer",
+                          border: selecionada
+                            ? correta
+                              ? "1px solid rgba(34,197,94,.75)"
+                              : "1px solid rgba(248,113,113,.75)"
+                            : "1px solid rgba(148,163,184,.18)",
+                          background: selecionada
+                            ? correta
+                              ? "rgba(34,197,94,.16)"
+                              : "rgba(248,113,113,.14)"
+                            : "rgba(15,23,42,.42)",
+                          color: "#f8fafc",
+                          fontWeight: 700,
+                        }}
+                      >
+                        {String.fromCharCode(65 + index)}) {alternativa}
+                      </button>
+                    );
+                  }
+                )}
+
+                {respostasTreinamento[moduloSelecionadoTreinamento.id] !==
+                  undefined && (
+                  <div
+                    style={{
+                      padding: 16,
+                      borderRadius: 16,
+                      border:
+                        respostasTreinamento[
+                          moduloSelecionadoTreinamento.id
+                        ] === moduloSelecionadoTreinamento.pergunta.correta
+                          ? "1px solid rgba(34,197,94,.45)"
+                          : "1px solid rgba(248,113,113,.45)",
+                      background:
+                        respostasTreinamento[
+                          moduloSelecionadoTreinamento.id
+                        ] === moduloSelecionadoTreinamento.pergunta.correta
+                          ? "rgba(34,197,94,.10)"
+                          : "rgba(248,113,113,.10)",
+                      color: "#cbd5e1",
+                    }}
+                  >
+                    <strong style={{ color: "#f8fafc" }}>
+                      {respostasTreinamento[moduloSelecionadoTreinamento.id] ===
+                      moduloSelecionadoTreinamento.pergunta.correta
+                        ? "Resposta correta. Módulo concluído."
+                        : "Resposta incorreta. Revise o conteúdo deste módulo."}
+                    </strong>
+                    <br />
+                    {moduloSelecionadoTreinamento.pergunta.explicacao}
+                  </div>
+                )}
+
+                {respostasTreinamento[moduloSelecionadoTreinamento.id] !==
+                  undefined && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      enviarRespostaTreinamento(moduloSelecionadoTreinamento)
+                    }
+                    style={{
+                      background: "linear-gradient(135deg,#3b82f6,#2563eb)",
+                      border: "none",
+                      color: "#fff",
+                      borderRadius: 14,
+                      padding: "14px 18px",
+                      cursor: "pointer",
+                      fontWeight: 900,
+                      boxShadow: "0 0 25px rgba(37,99,235,.35)",
+                    }}
+                  >
+                    Enviar resposta para diretoria
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div style={painelDarkStyle}>
+        <h2 style={tituloCardDarkStyle}>Avaliação manual do líder</h2>
+        <p style={{ color: "#94a3b8" }}>
+          Área para a diretoria registrar uma avaliação simples do líder em
+          treinamento. Nesta versão, os dados ficam na tela; depois podemos
+          salvar no Supabase.
+        </p>
+
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: isTablet ? "1fr" : "repeat(4, 1fr)",
+            gap: 14,
+          }}
+        >
+          <div>
+            <label style={labelStyle}>Líder avaliado</label>
+            <input
+              value={avaliacaoLider.lider}
+              onChange={(e) =>
+                setAvaliacaoLider({ ...avaliacaoLider, lider: e.target.value })
+              }
+              placeholder="Nome do líder"
+              style={inputStyle}
+            />
+          </div>
+
+          <div>
+            <label style={labelStyle}>Projeto relacionado</label>
+            <input
+              value={avaliacaoLider.projeto}
+              onChange={(e) =>
+                setAvaliacaoLider({
+                  ...avaliacaoLider,
+                  projeto: e.target.value,
+                })
+              }
+              placeholder="Nome do projeto"
+              style={inputStyle}
+            />
+          </div>
+
+          <div>
+            <label style={labelStyle}>Nota</label>
+            <input
+              value={avaliacaoLider.nota}
+              onChange={(e) =>
+                setAvaliacaoLider({ ...avaliacaoLider, nota: e.target.value })
+              }
+              placeholder="0 a 10"
+              style={inputStyle}
+            />
+          </div>
+
+          <div>
+            <label style={labelStyle}>Status</label>
+            <select
+              value={avaliacaoLider.status}
+              onChange={(e) =>
+                setAvaliacaoLider({ ...avaliacaoLider, status: e.target.value })
+              }
+              style={inputStyle}
+            >
+              <option value="em_treinamento">Em treinamento</option>
+              <option value="aprovado">Aprovado</option>
+              <option value="reprovado">Reprovado</option>
+              <option value="pausado">Pausado</option>
+              <option value="atencao">Atenção</option>
+            </select>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 14 }}>
+          <label style={labelStyle}>Observações da diretoria</label>
+          <textarea
+            value={avaliacaoLider.observacoes}
+            onChange={(e) =>
+              setAvaliacaoLider({
+                ...avaliacaoLider,
+                observacoes: e.target.value,
+              })
+            }
+            placeholder="Pontos positivos, pontos a melhorar e orientações..."
+            style={{ ...inputStyle, minHeight: 110, resize: "vertical" }}
+          />
+        </div>
+
+        <div
+          style={{
+            marginTop: 18,
+            padding: 16,
+            borderRadius: 16,
+            border: "1px solid rgba(56,189,248,.25)",
+            background: "rgba(14,165,233,.10)",
+            color: "#cbd5e1",
+          }}
+        >
+          <strong style={{ color: "#f8fafc" }}>Resumo da avaliação:</strong>
+          <br />
+          Líder: {avaliacaoLider.lider || "Não informado"} • Projeto:{" "}
+          {avaliacaoLider.projeto || "Não informado"} • Nota:{" "}
+          {avaliacaoLider.nota || "-"} • Status: {avaliacaoLider.status}
+        </div>
+      </div>
+    </div>
+  );
+
   const ProjectsPage = () => (
     <div style={{ display: "grid", gap: 18 }}>
       <div style={pageHeaderDarkStyle}>
@@ -3537,7 +4860,7 @@ export default function App() {
             style={botaoSecundarioStyle}
             title="Central de notificações da diretoria"
           >
-            🔔 Notificações ({notificacoesDiretoriaDemo.length})
+            🔔 Notificações ({notificacoesProjeto.length})
           </button>
           {projetoPainel && (
             <button
@@ -3704,22 +5027,41 @@ export default function App() {
             </div>
 
             {rascunho && podeEditarProjeto(usuarioLogado, projetoPainel) && (
-              <button
-                type="button"
-                onClick={adicionarElencoRascunho}
-                style={{
-                  background: "linear-gradient(135deg,#3b82f6,#2563eb)",
-                  border: "none",
-                  color: "#fff",
-                  borderRadius: 14,
-                  padding: "12px 18px",
-                  cursor: "pointer",
-                  fontWeight: 800,
-                  boxShadow: "0 0 25px rgba(37,99,235,.35)",
-                }}
-              >
-                + Adicionar personagem
-              </button>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <button
+                  type="button"
+                  onClick={adicionarElencoRascunho}
+                  style={{
+                    background: "linear-gradient(135deg,#3b82f6,#2563eb)",
+                    border: "none",
+                    color: "#fff",
+                    borderRadius: 14,
+                    padding: "12px 18px",
+                    cursor: "pointer",
+                    fontWeight: 800,
+                    boxShadow: "0 0 25px rgba(37,99,235,.35)",
+                  }}
+                >
+                  + Adicionar personagem
+                </button>
+
+                <button
+                  type="button"
+                  onClick={salvarElencoAtual}
+                  style={{
+                    background: "linear-gradient(135deg,#22c55e,#16a34a)",
+                    border: "none",
+                    color: "#fff",
+                    borderRadius: 14,
+                    padding: "12px 18px",
+                    cursor: "pointer",
+                    fontWeight: 800,
+                    boxShadow: "0 0 25px rgba(34,197,94,.28)",
+                  }}
+                >
+                  Salvar elenco
+                </button>
+              </div>
             )}
           </div>
           <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
@@ -3881,15 +5223,13 @@ export default function App() {
 
       {abaProjeto === "atividades" && (
         <div style={painelDarkStyle}>
-          <h2 style={tituloCardDarkStyle}>
-            🔔 Central de Notificações da Diretoria
-          </h2>
+          <h2 style={tituloCardDarkStyle}>🔔 Atividades do Projeto</h2>
           <p style={{ color: "#94a3b8", marginTop: 8 }}>
-            Estas notificações futuramente serão geradas automaticamente com
-            base nas ações dos usuários dentro do sistema.
+            Aqui aparecem somente atividades vinculadas ao projeto selecionado e
+            ao seu acesso.
           </p>
           <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
-            {notificacoesDiretoriaDemo.map((item, index) => (
+            {notificacoesProjeto.map((item, index) => (
               <div
                 key={`${item.usuario}-${index}`}
                 style={{
@@ -3925,9 +5265,8 @@ export default function App() {
               ◷ Histórico de Alterações — {projetoPainel.Projeto}
             </h2>
             <p style={{ color: "#94a3b8", marginTop: 8 }}>
-              Histórico vinculado a este projeto. Na próxima etapa, esses
-              registros serão gravados automaticamente no Supabase por ID do
-              projeto.
+              Histórico vinculado a este projeto. Toda ação salva fica
+              registrada aqui com data, hora e usuário.
             </p>
             <div style={{ display: "grid", gap: 12, marginTop: 18 }}>
               {(projetoPainel.Registro_Semanal
@@ -4136,9 +5475,7 @@ export default function App() {
               id="treinamentos"
               label="Treinamentos"
               icon="◇"
-              onClick={() =>
-                alert("Treinamentos entra na próxima etapa do painel.")
-              }
+              onClick={abrirTelaTreinamentos}
             />
           )}
         </nav>
@@ -4178,7 +5515,9 @@ export default function App() {
       </aside>
 
       <main style={{ flex: 1, padding: isMobile ? 14 : 26, minWidth: 0 }}>
-        {telaAtual === "membros"
+        {telaAtual === "treinamentos"
+          ? TrainingPage()
+          : telaAtual === "membros"
           ? MembersPage()
           : telaAtual === "usuarios"
           ? UsersPage()
