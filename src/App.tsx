@@ -69,6 +69,7 @@ type ElencoItem = {
   id: string;
   personagem: string;
   dublador: string;
+  telefone_dublador?: string;
   funcao: string;
 };
 
@@ -669,11 +670,7 @@ function permissaoPadraoPorCargo(cargo: Cargo, chave: ChavePermissao) {
     return ["acesso_usuarios", "acesso_treinamentos"].includes(chave);
   }
 
-  if (cargo === "lider_treinamento") {
-    return ["acesso_treinamentos"].includes(chave);
-  }
-
-  if (cargo === "lider") {
+  if (cargo === "lider" || cargo === "lider_treinamento") {
     return [
       "acesso_projetos",
       "acesso_relatorios_elenco",
@@ -719,12 +716,8 @@ function podeVerProjeto(usuario: Usuario | null, projeto: Projeto) {
     return true;
   }
 
-  if (cargo === "lider") {
+  if (cargo === "lider" || cargo === "lider_treinamento") {
     return lider === vinculo || lider === login || lider === nome;
-  }
-
-  if (cargo === "lider_treinamento") {
-    return false;
   }
 
   if (cargo === "editor") {
@@ -745,12 +738,8 @@ function podeEditarProjeto(usuario: Usuario | null, projeto: Projeto | null) {
 
   if (cargo === "diretoria" || cargo === "adm") return true;
 
-  if (cargo === "lider") {
+  if (cargo === "lider" || cargo === "lider_treinamento") {
     return lider === vinculo || lider === login || lider === nome;
-  }
-
-  if (cargo === "lider_treinamento") {
-    return false;
   }
 
   return false;
@@ -758,7 +747,11 @@ function podeEditarProjeto(usuario: Usuario | null, projeto: Projeto | null) {
 
 function podeCriarProjeto(usuario: Usuario | null) {
   if (!usuario) return false;
-  return ["diretoria", "adm", "lider"].indexOf(usuario.cargo) !== -1;
+  return (
+    ["diretoria", "adm", "lider", "lider_treinamento"].indexOf(
+      usuario.cargo
+    ) !== -1
+  );
 }
 
 function podeSubirVideoEditor(
@@ -944,10 +937,7 @@ async function salvarRespostaTreinamentoBanco(
   ]);
 
   if (error) {
-    console.error(
-      "Erro ao salvar resposta do treinamento. Confira se a tabela treinamento_respostas foi criada no Supabase:",
-      error
-    );
+    console.error("Erro ao salvar resposta do treinamento:", error);
     return false;
   }
 
@@ -1112,6 +1102,7 @@ async function carregarProjetosBanco(
       id: String(item.id),
       personagem: item.personagem || "",
       dublador: item.dublador || "",
+      telefone_dublador: item.telefone_dublador || "",
       funcao: item.funcao || "",
     });
   });
@@ -1223,6 +1214,7 @@ async function salvarElencoProjetoBanco(
     projeto_id: Number(projetoId),
     personagem: item.personagem,
     dublador: item.dublador,
+    telefone_dublador: item.telefone_dublador || "",
     funcao: item.funcao || "",
   }));
 
@@ -2143,11 +2135,21 @@ export default function App() {
     });
 
     const elencoAntes = (antes.Elenco || [])
-      .map((item) => `${item.personagem}|${item.dublador}|${item.funcao}`)
+      .map(
+        (item) =>
+          `${item.personagem}|${item.dublador}|${
+            item.telefone_dublador || ""
+          }|${item.funcao}`
+      )
       .join(";;");
 
     const elencoDepois = (depois.Elenco || [])
-      .map((item) => `${item.personagem}|${item.dublador}|${item.funcao}`)
+      .map(
+        (item) =>
+          `${item.personagem}|${item.dublador}|${
+            item.telefone_dublador || ""
+          }|${item.funcao}`
+      )
       .join(";;");
 
     if (elencoAntes !== elencoDepois) {
@@ -5071,7 +5073,7 @@ export default function App() {
                   key={item.id || index}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1.4fr",
+                    gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr 1fr 1.4fr",
                     gap: 12,
                     alignItems: "center",
                     background: "rgba(2,6,23,0.48)",
@@ -5128,6 +5130,31 @@ export default function App() {
                       </div>
                     )}
                   </div>
+                  <div>
+                    <div style={{ color: "#94a3b8", fontSize: 12 }}>
+                      Telefone do dublador
+                    </div>
+                    {rascunho &&
+                    podeEditarProjeto(usuarioLogado, projetoPainel) ? (
+                      <input
+                        value={item.telefone_dublador || ""}
+                        onChange={(e) =>
+                          atualizarElencoRascunho(
+                            index,
+                            "telefone_dublador" as any,
+                            e.target.value
+                          )
+                        }
+                        placeholder="Número do dublador"
+                        style={inputStyle}
+                      />
+                    ) : (
+                      <div style={{ color: "#f8fafc", fontWeight: 900 }}>
+                        {item.telefone_dublador || "-"}
+                      </div>
+                    )}
+                  </div>
+
                   <input
                     placeholder="Link do vídeo/teste deste personagem"
                     value={(item as any).video_link || ""}
