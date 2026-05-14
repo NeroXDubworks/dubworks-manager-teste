@@ -73,6 +73,17 @@ type ElencoItem = {
   funcao: string;
 };
 
+type DriveStructureResult = {
+  pasta?: string;
+  selecao?: string;
+  projeto?: string;
+  finalizados?: string;
+  pastaId?: string;
+  selecaoId?: string;
+  projetoId?: string;
+  finalizadosId?: string;
+};
+
 type Projeto = {
   ID: string;
   Projeto: string;
@@ -917,6 +928,27 @@ function mapMembroDb(item: any): Membro {
   };
 }
 
+async function criarEstruturaDriveViaFunction(
+  projetoNome: string
+): Promise<DriveStructureResult | null> {
+  const { data, error } = await supabase.functions.invoke(
+    "google-drive-create-structure",
+    {
+      body: {
+        projectName: projetoNome,
+        folders: ["1 | Seleção", "2 | Projeto", "3 | Finalizado"],
+      },
+    }
+  );
+
+  if (error) {
+    console.error("Erro ao chamar função do Google Drive:", error);
+    return null;
+  }
+
+  return (data || null) as DriveStructureResult | null;
+}
+
 async function salvarRespostaTreinamentoBanco(
   resposta: RespostaTreinamento
 ): Promise<boolean> {
@@ -1319,6 +1351,8 @@ function extrairLinksDrive(observacoes?: string) {
   if (inicio === -1 || fim === -1) {
     return {
       pasta: "",
+      selecao: "",
+      projeto: "",
       videos: "",
       cortes: "",
       finalizados: "",
@@ -1330,6 +1364,8 @@ function extrairLinksDrive(observacoes?: string) {
 
     return {
       pasta: "",
+      selecao: "",
+      projeto: "",
       videos: "",
       cortes: "",
       finalizados: "",
@@ -1338,6 +1374,8 @@ function extrairLinksDrive(observacoes?: string) {
   } catch {
     return {
       pasta: "",
+      selecao: "",
+      projeto: "",
       videos: "",
       cortes: "",
       finalizados: "",
@@ -1473,6 +1511,7 @@ export default function App() {
     useState<ElencoItem>(elencoVazio);
   const [novoElencoRascunho, setNovoElencoRascunho] =
     useState<ElencoItem>(elencoVazio);
+  const [criandoEstruturaDrive, setCriandoEstruturaDrive] = useState(false);
 
   useEffect(() => {
     function atualizarLargura() {
@@ -2051,6 +2090,85 @@ export default function App() {
     });
   }
 
+  async function criarEstruturaDriveProjeto() {
+    if (!rascunho || !projetoPainel) return;
+
+    if (!podeEditarProjeto(usuarioLogado, projetoPainel)) {
+      alert("Você não tem permissão para criar pastas neste projeto.");
+      return;
+    }
+
+    const linksAtuais = extrairLinksDrive(rascunho.Observacoes);
+
+    if (
+      linksAtuais.pasta ||
+      linksAtuais.selecao ||
+      linksAtuais.projeto ||
+      linksAtuais.finalizados
+    ) {
+      const confirmar = window.confirm(
+        "Este projeto já possui links do Drive cadastrados. Deseja continuar mesmo assim?"
+      );
+
+      if (!confirmar) return;
+    }
+
+    try {
+      setCriandoEstruturaDrive(true);
+
+      const resultado = await criarEstruturaDriveViaFunction(
+        `[Projeto] ${rascunho.Projeto || projetoPainel.Projeto || "Sem nome"}`
+      );
+
+      if (!resultado) {
+        alert(
+          "A estrutura ainda não foi criada porque a função google-drive-create-structure não está configurada no Supabase. Deixei o botão pronto nesta branch para ligarmos a API do Google Drive na próxima etapa."
+        );
+        return;
+      }
+
+      const novosLinks = {
+        ...linksAtuais,
+        pasta: resultado.pasta || linksAtuais.pasta || "",
+        selecao: resultado.selecao || linksAtuais.selecao || "",
+        projeto: resultado.projeto || linksAtuais.projeto || "",
+        finalizados: resultado.finalizados || linksAtuais.finalizados || "",
+      };
+
+      const projetoComLinks: Projeto = {
+        ...rascunho,
+        Observacoes: salvarLinksDriveEmObservacoes(
+          rascunho.Observacoes,
+          novosLinks
+        ),
+      };
+
+      const projetoComHistorico = aplicarHistoricoAutomatico(
+        projetoPainel,
+        projetoComLinks,
+        "criou estrutura oficial no Google Drive"
+      );
+
+      const ok = await atualizarProjetoBanco(projetoComHistorico);
+
+      if (!ok) {
+        alert(
+          "A estrutura foi criada, mas houve erro ao salvar os links no banco."
+        );
+        return;
+      }
+
+      setRascunho(projetoComHistorico);
+      await recarregarProjetos();
+      alert("Estrutura do Drive criada e links salvos no projeto.");
+    } catch (err) {
+      console.error("Erro ao criar estrutura no Drive:", err);
+      alert("Erro ao criar estrutura no Drive. Veja o console para detalhes.");
+    } finally {
+      setCriandoEstruturaDrive(false);
+    }
+  }
+
   async function salvarLinksDriveComHistorico() {
     if (!rascunho || !projetoPainel) return;
 
@@ -2063,12 +2181,18 @@ export default function App() {
       alterados.push("Pasta Principal");
     }
 
-    if ((linksAtuais.videos || "") !== (linksAntigos.videos || "")) {
-      alterados.push("Vídeos dos Personagens");
+    if (
+      (linksAtuais.selecao || linksAtuais.videos || "") !==
+      (linksAntigos.selecao || linksAntigos.videos || "")
+    ) {
+      alterados.push("1 | Seleção");
     }
 
-    if ((linksAtuais.cortes || "") !== (linksAntigos.cortes || "")) {
-      alterados.push("Cortes / Cenas");
+    if (
+      (linksAtuais.projeto || linksAtuais.cortes || "") !==
+      (linksAntigos.projeto || linksAntigos.cortes || "")
+    ) {
+      alterados.push("2 | Projeto");
     }
 
     if ((linksAtuais.finalizados || "") !== (linksAntigos.finalizados || "")) {
@@ -3084,7 +3208,7 @@ export default function App() {
   const driveSalvo = extrairLinksDrive(projetoDrive?.Observacoes);
 
   const driveLinks: {
-    chave: "pasta" | "videos" | "cortes" | "finalizados";
+    chave: "pasta" | "selecao" | "projeto" | "finalizados";
     titulo: string;
     descricao: string;
     icone: string;
@@ -3094,31 +3218,34 @@ export default function App() {
     {
       chave: "pasta",
       titulo: "Pasta Principal",
-      descricao: "Pasta principal do projeto com todos os materiais.",
+      descricao: "Pasta principal do projeto com toda a estrutura oficial.",
       icone: "📁",
       cor: "#2563eb",
       link: driveSalvo.pasta || "",
     },
     {
-      chave: "videos",
-      titulo: "Vídeos dos Personagens",
-      descricao: "Links de vídeos/testes separados por personagem.",
+      chave: "selecao",
+      titulo: "1 | Seleção",
+      descricao:
+        "Falas teste, formulário de seleção, testes enviados e resultado.",
       icone: "🎙️",
       cor: "#7c3aed",
-      link: driveSalvo.videos || "",
+      link: driveSalvo.selecao || driveSalvo.videos || "",
     },
     {
-      chave: "cortes",
-      titulo: "Cortes / Cenas",
-      descricao: "Cortes, cenas brutas e arquivos de edição.",
-      icone: "✂️",
+      chave: "projeto",
+      titulo: "2 | Projeto",
+      descricao:
+        "Cortes, cenas, áudios recebidos, edição e materiais em andamento.",
+      icone: "🧩",
       cor: "#16a34a",
-      link: driveSalvo.cortes || "",
+      link: driveSalvo.projeto || driveSalvo.cortes || "",
     },
     {
       chave: "finalizados",
-      titulo: "Finalizados",
-      descricao: "Episódios finalizados e prontos para postagem.",
+      titulo: "3 | Finalizado",
+      descricao:
+        "Vídeo final, créditos, thumbs, capas, renders e arquivos concluídos.",
       icone: "🎬",
       cor: "#f97316",
       link: driveSalvo.finalizados || "",
@@ -3631,19 +3758,61 @@ export default function App() {
             <span>📁</span> Arquivos do Drive
           </h2>
           <p style={{ color: "#94a3b8", margin: "8px 0 0" }}>
-            Cole os links do Drive nos campos abaixo e clique em “Salvar
-            alterações”.
+            Crie a estrutura oficial no Google Drive ou cole os links
+            manualmente. Estrutura: 1 | Seleção, 2 | Projeto e 3 | Finalizado.
           </p>
         </div>
 
         {projetoPainel && podeEditarProjeto(usuarioLogado, projetoPainel) && (
-          <button
-            onClick={salvarLinksDriveComHistorico}
-            style={botaoPrimarioStyle}
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+              justifyContent: "flex-end",
+            }}
           >
-            Salvar links
-          </button>
+            <button
+              onClick={criarEstruturaDriveProjeto}
+              disabled={criandoEstruturaDrive}
+              style={{
+                ...botaoPrimarioStyle,
+                opacity: criandoEstruturaDrive ? 0.7 : 1,
+                cursor: criandoEstruturaDrive ? "not-allowed" : "pointer",
+              }}
+            >
+              {criandoEstruturaDrive
+                ? "Criando estrutura..."
+                : "Criar estrutura no Drive"}
+            </button>
+
+            <button
+              onClick={salvarLinksDriveComHistorico}
+              style={botaoSecundarioStyle}
+            >
+              Salvar links
+            </button>
+          </div>
         )}
+      </div>
+
+      <div
+        style={{
+          padding: 16,
+          borderRadius: 16,
+          border: "1px solid rgba(56,189,248,.25)",
+          background: "rgba(14,165,233,.08)",
+          color: "#cbd5e1",
+          marginBottom: 16,
+        }}
+      >
+        <strong style={{ color: "#f8fafc" }}>
+          Integração Google Drive — Beta
+        </strong>
+        <br />O botão cria a pasta principal do projeto e as subpastas oficiais:
+        <strong> 1 | Seleção</strong>, <strong>2 | Projeto</strong> e{" "}
+        <strong>3 | Finalizado</strong>. Se a função do Supabase ainda não
+        estiver configurada, o app apenas avisará sem quebrar o sistema.
       </div>
 
       <div style={{ display: "grid", gap: 16 }}>
@@ -3684,7 +3853,7 @@ export default function App() {
               </div>
 
               <input
-                placeholder="Cole o link do Drive aqui"
+                placeholder="Cole o link desta pasta aqui"
                 value={item.link || ""}
                 onChange={(e) => {
                   if (!rascunho) return;
