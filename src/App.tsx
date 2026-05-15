@@ -929,24 +929,49 @@ function mapMembroDb(item: any): Membro {
 }
 
 async function criarEstruturaDriveViaFunction(
-  projetoNome: string
-): Promise<DriveStructureResult | null> {
-  const { data, error } = await supabase.functions.invoke(
-    "google-drive-create-structure",
+  projetoNome: string,
+  leaderEmail = "",
+  editorEmail = ""
+): Promise<DriveStructureResult> {
+  const response = await fetch(
+    "https://omgjbafqukpzdhhpdlaa.supabase.co/functions/v1/google-drive-create-structure",
     {
-      body: {
-        projectName: projetoNome,
-        folders: ["1 | Seleção", "2 | Projeto", "3 | Finalizado"],
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: "sb_publishable_3bAOHbPjpV5RMnqb-cJKRA_cB1okqvT",
+        Authorization: "Bearer sb_publishable_3bAOHbPjpV5RMnqb-cJKRA_cB1okqvT",
       },
+      body: JSON.stringify({
+        projectName: projetoNome,
+        leaderEmail,
+        editorEmail,
+        folders: ["1 | Seleção", "2 | Projeto", "3 | Finalizado"],
+      }),
     }
   );
 
-  if (error) {
-    console.error("Erro ao chamar função do Google Drive:", error);
-    return null;
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    console.error("Erro da Edge Function Google Drive:", data);
+    throw new Error(
+      data?.error ||
+        data?.message ||
+        `Edge Function retornou erro HTTP ${response.status}`
+    );
   }
 
-  return (data || null) as DriveStructureResult | null;
+  if (!data) {
+    throw new Error("A Edge Function não retornou dados.");
+  }
+
+  if (data.error) {
+    console.error("Erro retornado pela Edge Function:", data);
+    throw new Error(String(data.error));
+  }
+
+  return data as DriveStructureResult;
 }
 
 async function salvarRespostaTreinamentoBanco(
@@ -2120,9 +2145,15 @@ export default function App() {
         `[Projeto] ${rascunho.Projeto || projetoPainel.Projeto || "Sem nome"}`
       );
 
-      if (!resultado) {
+      if (
+        !resultado.pasta &&
+        !resultado.selecao &&
+        !resultado.projeto &&
+        !resultado.finalizados
+      ) {
+        console.error("Retorno inesperado da função do Drive:", resultado);
         alert(
-          "A estrutura ainda não foi criada porque a função google-drive-create-structure não está configurada no Supabase. Deixei o botão pronto nesta branch para ligarmos a API do Google Drive na próxima etapa."
+          "A função respondeu, mas não retornou os links das pastas. Verifique os logs da Edge Function no Supabase."
         );
         return;
       }
@@ -2161,9 +2192,13 @@ export default function App() {
       setRascunho(projetoComHistorico);
       await recarregarProjetos();
       alert("Estrutura do Drive criada e links salvos no projeto.");
-    } catch (err) {
+    } catch (err: any) {
       console.error("Erro ao criar estrutura no Drive:", err);
-      alert("Erro ao criar estrutura no Drive. Veja o console para detalhes.");
+      alert(
+        `Erro ao criar estrutura no Drive: ${
+          err?.message || String(err) || "erro desconhecido"
+        }`
+      );
     } finally {
       setCriandoEstruturaDrive(false);
     }

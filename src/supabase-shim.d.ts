@@ -4,6 +4,4 @@ declare module "@supabase/supabase-js" {
     supabaseKey: string,
     options?: any
   ): any;
-
-  export const SupabaseClient: any;
 }
