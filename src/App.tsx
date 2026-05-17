@@ -2,6 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "./lib/supabase";
 
 const LOGO_URL = "/Logo_dubworks.png";
+const FORMS_COPIER_URL =
+  "https://script.google.com/macros/s/AKfycbwdbYEQydYzSH3mKPc_sWagVmrSPFbNJIWRoAq2oLprtwjGHDioiD0CBQknZVL2sAsW/exec";
 
 type Cargo =
   | "diretoria"
@@ -71,6 +73,37 @@ type ElencoItem = {
   dublador: string;
   telefone_dublador?: string;
   funcao: string;
+  status_entrega?: string;
+  semana_atual?: string;
+  video_entrega?: string;
+};
+
+type DriveStructureResult = {
+  pasta?: string;
+  selecao?: string;
+  projeto?: string;
+  finalizados?: string;
+  falasTeste?: string;
+  respostasSelecao?: string;
+  cortesProjeto?: string;
+  entregasProjeto?: string;
+  formSelecao?: string;
+  formEntregas?: string;
+  planilhaSelecao?: string;
+  planilhaEntregas?: string;
+
+  pastaId?: string;
+  selecaoId?: string;
+  projetoId?: string;
+  finalizadosId?: string;
+  falasTesteId?: string;
+  respostasSelecaoId?: string;
+  cortesProjetoId?: string;
+  entregasProjetoId?: string;
+  formSelecaoId?: string;
+  formEntregasId?: string;
+  planilhaSelecaoId?: string;
+  planilhaEntregasId?: string;
 };
 
 type Projeto = {
@@ -110,6 +143,67 @@ type Membro = {
   status: StatusMembro;
   data_entrada?: string | null;
   data_saida?: string | null;
+  observacao?: string | null;
+};
+
+type StatusSelecao = "pendente" | "aprovado" | "reprovado";
+
+type RespostaSelecao = {
+  id: string;
+  projetoId?: string;
+  linha?: number;
+  timestamp: string;
+  nome: string;
+  telefone: string;
+  personagem: string;
+  semana: string;
+  videoUrl: string;
+  comentario: string;
+  status: StatusSelecao;
+};
+
+type AvaliacaoSelecao = {
+  id?: number;
+  projeto_id: number;
+  resposta_id: string;
+  linha?: number | null;
+  nome: string;
+  telefone: string;
+  personagem: string;
+  semana: string;
+  video_url: string;
+  comentario_membro: string;
+  status: StatusSelecao;
+  comentario_lider: string;
+  avaliado_por: string;
+  data_avaliacao?: string | null;
+};
+
+type EntregaProducao = {
+  id?: number;
+  projeto_id: number;
+  resposta_id: string;
+  linha?: number | null;
+  personagem: string;
+  dublador: string;
+  telefone: string;
+  semana: string;
+  video_url: string;
+  comentario: string;
+  status: "pendente" | "aprovado" | "regravacao";
+  avaliado_por?: string | null;
+  data_envio?: string | null;
+  data_avaliacao?: string | null;
+};
+
+type ProjetoSemana = {
+  id?: number;
+  projeto_id: number;
+  semana: number;
+  status: "aberta" | "concluida";
+  aberta_em?: string | null;
+  fechada_em?: string | null;
+  liberada_por?: string | null;
   observacao?: string | null;
 };
 
@@ -841,6 +935,21 @@ function corStatus(status: string) {
   return { bg: "rgba(30,41,59,0.80)", color: "#cbd5e1" };
 }
 
+function numeroSemanaEntrega(valor?: string | number | null) {
+  const texto = String(valor || "").trim();
+  if (!texto) return 1;
+
+  const match = texto.match(/\d+/);
+  if (!match) return 1;
+
+  const numero = Number(match[0]);
+  return Number.isFinite(numero) && numero > 0 ? numero : 1;
+}
+
+function labelSemana(numero: number) {
+  return `Semana ${String(numero).padStart(2, "0")}`;
+}
+
 function escaparCSV(valor?: string) {
   const texto = String(valor || "").replace(/"/g, '""');
   return `"${texto}"`;
@@ -915,6 +1024,469 @@ function mapMembroDb(item: any): Membro {
     data_saida: item.data_saida || null,
     observacao: item.observacao || "",
   };
+}
+
+async function criarEstruturaDriveViaFunction(
+  projetoNome: string,
+  leaderEmail = "",
+  editorEmail = ""
+): Promise<DriveStructureResult> {
+  const response = await fetch(
+    "https://omgjbafqukpzdhhpdlaa.supabase.co/functions/v1/google-drive-create-structure",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: "sb_publishable_3bAOHbPjpV5RMnqb-cJKRA_cB1okqvT",
+        Authorization: "Bearer sb_publishable_3bAOHbPjpV5RMnqb-cJKRA_cB1okqvT",
+      },
+      body: JSON.stringify({
+        projectName: projetoNome,
+        leaderEmail,
+        editorEmail,
+        folders: ["1 | Seleção", "2 | Projeto", "3 | Finalizado"],
+      }),
+    }
+  );
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    console.error("Erro da Edge Function Google Drive:", data);
+    throw new Error(
+      data?.error ||
+        data?.message ||
+        `Edge Function retornou erro HTTP ${response.status}`
+    );
+  }
+
+  if (!data) {
+    throw new Error("A Edge Function não retornou dados.");
+  }
+
+  if (data.error) {
+    console.error("Erro retornado pela Edge Function:", data);
+    throw new Error(String(data.error));
+  }
+
+  return data as DriveStructureResult;
+}
+
+async function copiarFormulariosViaAppsScript(
+  projetoNome: string,
+  respostasSelecaoFolderId?: string,
+  entregasFolderId?: string
+): Promise<Partial<DriveStructureResult>> {
+  if (!respostasSelecaoFolderId || !entregasFolderId) {
+    console.warn("Pastas para formulários ausentes:", {
+      respostasSelecaoFolderId,
+      entregasFolderId,
+    });
+    return {};
+  }
+
+  const response = await fetch(FORMS_COPIER_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "text/plain;charset=utf-8",
+    },
+    body: JSON.stringify({
+      projectName: projetoNome,
+      respostasSelecaoFolderId,
+      entregasFolderId,
+    }),
+  });
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    console.error("Erro ao chamar Apps Script dos formulários:", data);
+    throw new Error(
+      data?.error ||
+        data?.message ||
+        `Apps Script retornou erro HTTP ${response.status}`
+    );
+  }
+
+  if (!data) {
+    throw new Error("O Apps Script não retornou dados.");
+  }
+
+  if (data.error) {
+    console.error("Erro retornado pelo Apps Script:", data);
+    throw new Error(String(data.error));
+  }
+
+  return {
+    formSelecao: data.formSelecao?.editUrl || data.formSelecao?.viewUrl || "",
+    formSelecaoId: data.formSelecao?.id || "",
+    formEntregas:
+      data.formEntregas?.editUrl || data.formEntregas?.viewUrl || "",
+    formEntregasId: data.formEntregas?.id || "",
+    planilhaSelecao: data.planilhaSelecao?.url || "",
+    planilhaSelecaoId: data.planilhaSelecao?.id || "",
+    planilhaEntregas: data.planilhaEntregas?.url || "",
+    planilhaEntregasId: data.planilhaEntregas?.id || "",
+  };
+}
+
+function extrairGoogleFileId(urlOuId?: string) {
+  const texto = String(urlOuId || "").trim();
+  if (!texto) return "";
+
+  const matchD = texto.match(/\/d\/([^/]+)/);
+  if (matchD?.[1]) return matchD[1];
+
+  const matchId = texto.match(/[?&]id=([^&]+)/);
+  if (matchId?.[1]) return matchId[1];
+
+  if (/^[a-zA-Z0-9_-]{20,}$/.test(texto)) return texto;
+
+  return "";
+}
+
+function extrairGoogleFolderId(urlOuId?: string) {
+  const texto = String(urlOuId || "").trim();
+  if (!texto) return "";
+
+  const matchFolders = texto.match(/\/folders\/([^/?]+)/);
+  if (matchFolders?.[1]) return matchFolders[1];
+
+  const matchId = texto.match(/[?&]id=([^&]+)/);
+  if (matchId?.[1]) return matchId[1];
+
+  if (/^[a-zA-Z0-9_-]{20,}$/.test(texto)) return texto;
+
+  return "";
+}
+
+function converterDriveParaPreview(url?: string) {
+  const id = extrairGoogleFileId(url);
+  if (!id) return String(url || "");
+  return `https://drive.google.com/file/d/${id}/preview`;
+}
+
+async function lerRespostasSelecaoViaAppsScript(
+  planilhaSelecaoIdOuUrl: string,
+  pastaRespostasSelecaoIdOuUrl = ""
+): Promise<RespostaSelecao[]> {
+  const spreadsheetId = extrairGoogleFileId(planilhaSelecaoIdOuUrl);
+  const folderId = extrairGoogleFolderId(pastaRespostasSelecaoIdOuUrl);
+
+  if (!spreadsheetId && !folderId) {
+    throw new Error(
+      "Não encontrei a planilha de seleção nem a pasta de respostas neste projeto."
+    );
+  }
+
+  const response = await fetch(
+    "https://omgjbafqukpzdhhpdlaa.supabase.co/functions/v1/google-drive-create-structure",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: "sb_publishable_3bAOHbPjpV5RMnqb-cJKRA_cB1okqvT",
+        Authorization: "Bearer sb_publishable_3bAOHbPjpV5RMnqb-cJKRA_cB1okqvT",
+      },
+      body: JSON.stringify({
+        action: "ler_respostas_selecao",
+        spreadsheetId,
+        folderId,
+      }),
+    }
+  );
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    console.error("Erro ao ler respostas pela Edge Function:", data);
+    throw new Error(
+      data?.error ||
+        data?.message ||
+        `Edge Function retornou erro HTTP ${response.status}`
+    );
+  }
+
+  if (!data) {
+    throw new Error("A Edge Function não retornou dados.");
+  }
+
+  if (data.error) {
+    console.error("Erro retornado pela Edge Function:", data);
+    throw new Error(String(data.error));
+  }
+
+  return (data.respostas || []).map((item: any, index: number) => ({
+    id: String(item.id || item.linha || index + 1),
+    linha: Number(item.linha || index + 2),
+    timestamp: item.timestamp || item.data || "",
+    nome: item.nome || item.membro || "",
+    telefone: item.telefone || item.numero || item.whatsapp || "",
+    personagem: item.personagem || "",
+    semana: item.semana || "Semana 01",
+    videoUrl: item.videoUrl || item.video || item.envio || item.link || "",
+    comentario: item.comentario || item.observacao || "",
+    status: (item.status || "pendente") as StatusSelecao,
+  }));
+}
+
+async function salvarAvaliacaoSelecaoBanco(
+  avaliacao: AvaliacaoSelecao
+): Promise<boolean> {
+  const payload = {
+    projeto_id: avaliacao.projeto_id,
+    resposta_id: avaliacao.resposta_id,
+    linha: avaliacao.linha ?? null,
+    nome: avaliacao.nome,
+    telefone: avaliacao.telefone,
+    personagem: avaliacao.personagem,
+    semana: avaliacao.semana,
+    video_url: avaliacao.video_url,
+    comentario_membro: avaliacao.comentario_membro,
+    status: avaliacao.status,
+    comentario_lider: avaliacao.comentario_lider,
+    avaliado_por: avaliacao.avaliado_por,
+  };
+
+  const { error } = await supabase.from("selecao_avaliacoes").upsert(payload, {
+    onConflict: "projeto_id,resposta_id",
+  });
+
+  if (error) {
+    console.error("Erro ao salvar avaliação da seleção:", error);
+    return false;
+  }
+
+  return true;
+}
+
+async function carregarAvaliacoesSelecaoBanco(
+  projetoId: string
+): Promise<AvaliacaoSelecao[]> {
+  const { data, error } = await supabase
+    .from("selecao_avaliacoes")
+    .select("*")
+    .eq("projeto_id", Number(projetoId))
+    .order("data_avaliacao", { ascending: false });
+
+  if (error) {
+    console.error("Erro ao carregar avaliações da seleção:", error);
+    return [];
+  }
+
+  return (data || []) as AvaliacaoSelecao[];
+}
+
+async function lerRespostasEntregasViaEdge(
+  planilhaEntregasIdOuUrl: string,
+  pastaEntregasIdOuUrl = ""
+): Promise<EntregaProducao[]> {
+  const spreadsheetId = extrairGoogleFileId(planilhaEntregasIdOuUrl);
+  const folderId = extrairGoogleFolderId(pastaEntregasIdOuUrl);
+
+  if (!spreadsheetId && !folderId) {
+    throw new Error(
+      "Não encontrei a planilha nem a pasta de entregas neste projeto."
+    );
+  }
+
+  const response = await fetch(
+    "https://omgjbafqukpzdhhpdlaa.supabase.co/functions/v1/google-drive-create-structure",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: "sb_publishable_3bAOHbPjpV5RMnqb-cJKRA_cB1okqvT",
+        Authorization: "Bearer sb_publishable_3bAOHbPjpV5RMnqb-cJKRA_cB1okqvT",
+      },
+      body: JSON.stringify({
+        action: "ler_respostas_entregas",
+        spreadsheetId,
+        folderId,
+      }),
+    }
+  );
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    console.error("Erro ao ler entregas pela Edge Function:", data);
+    throw new Error(
+      data?.error ||
+        data?.message ||
+        `Edge Function retornou erro HTTP ${response.status}`
+    );
+  }
+
+  if (!data) throw new Error("A Edge Function não retornou dados.");
+  if (data.error) throw new Error(String(data.error));
+
+  return (data.respostas || []).map((item: any, index: number) => ({
+    projeto_id: 0,
+    resposta_id: String(item.id || item.linha || index + 1),
+    linha: Number(item.linha || index + 2),
+    personagem: item.personagem || "",
+    dublador: item.dublador || item.nome || item.membro || "",
+    telefone: item.telefone || item.numero || item.whatsapp || "",
+    semana: item.semana || "Semana 01",
+    video_url: item.videoUrl || item.video || item.envio || item.link || "",
+    comentario: item.comentario || item.observacao || "",
+    status: (item.status || "pendente") as
+      | "pendente"
+      | "aprovado"
+      | "regravacao",
+    data_envio: item.timestamp || item.data || "",
+  }));
+}
+
+async function salvarEntregasProducaoBanco(
+  projetoId: string,
+  entregas: EntregaProducao[]
+): Promise<boolean> {
+  if (!entregas.length) return true;
+
+  const payload = entregas.map((item) => ({
+    projeto_id: Number(projetoId),
+    resposta_id: item.resposta_id,
+    linha: item.linha ?? null,
+    personagem: item.personagem,
+    dublador: item.dublador,
+    telefone: item.telefone,
+    semana: item.semana,
+    video_url: item.video_url,
+    comentario: item.comentario,
+    status: item.status || "pendente",
+    data_envio: item.data_envio || "",
+  }));
+
+  const { error } = await supabase
+    .from("entregas_producao")
+    .upsert(payload, { onConflict: "projeto_id,resposta_id" });
+
+  if (error) {
+    console.error("Erro ao salvar entregas de produção:", error);
+    return false;
+  }
+
+  return true;
+}
+
+async function carregarEntregasProducaoBanco(
+  projetoId: string
+): Promise<EntregaProducao[]> {
+  const { data, error } = await supabase
+    .from("entregas_producao")
+    .select("*")
+    .eq("projeto_id", Number(projetoId))
+    .order("criado_em", { ascending: false });
+
+  if (error) {
+    console.error("Erro ao carregar entregas de produção:", error);
+    return [];
+  }
+
+  return (data || []) as EntregaProducao[];
+}
+
+async function atualizarStatusEntregaBanco(
+  entregaId: number,
+  status: "pendente" | "aprovado" | "regravacao",
+  avaliadoPor: string
+): Promise<boolean> {
+  const { error } = await supabase
+    .from("entregas_producao")
+    .update({
+      status,
+      avaliado_por: avaliadoPor,
+      data_avaliacao: new Date().toISOString(),
+      atualizado_em: new Date().toISOString(),
+    })
+    .eq("id", entregaId);
+
+  if (error) {
+    console.error("Erro ao atualizar status da entrega:", error);
+    return false;
+  }
+
+  return true;
+}
+
+async function carregarSemanasProjetoBanco(
+  projetoId: string
+): Promise<ProjetoSemana[]> {
+  const { data, error } = await supabase
+    .from("projeto_semanas")
+    .select("*")
+    .eq("projeto_id", Number(projetoId))
+    .order("semana", { ascending: true });
+
+  if (error) {
+    console.error("Erro ao carregar semanas do projeto:", error);
+    return [];
+  }
+
+  return (data || []) as ProjetoSemana[];
+}
+
+async function garantirSemanaProjetoBanco(
+  projetoId: string,
+  semana = 1,
+  usuario = "Sistema"
+): Promise<boolean> {
+  const { error } = await supabase.from("projeto_semanas").upsert(
+    {
+      projeto_id: Number(projetoId),
+      semana,
+      status: "aberta",
+      liberada_por: usuario,
+    },
+    { onConflict: "projeto_id,semana" }
+  );
+
+  if (error) {
+    console.error("Erro ao garantir semana do projeto:", error);
+    return false;
+  }
+
+  return true;
+}
+
+async function concluirSemanaProjetoBanco(
+  projetoId: string,
+  semana: number,
+  usuario = "Sistema"
+): Promise<boolean> {
+  const { error: erroFechar } = await supabase
+    .from("projeto_semanas")
+    .update({
+      status: "concluida",
+      fechada_em: new Date().toISOString(),
+      liberada_por: usuario,
+    })
+    .eq("projeto_id", Number(projetoId))
+    .eq("semana", semana);
+
+  if (erroFechar) {
+    console.error("Erro ao concluir semana:", erroFechar);
+    return false;
+  }
+
+  const { error: erroAbrir } = await supabase.from("projeto_semanas").upsert(
+    {
+      projeto_id: Number(projetoId),
+      semana: semana + 1,
+      status: "aberta",
+      liberada_por: usuario,
+    },
+    { onConflict: "projeto_id,semana" }
+  );
+
+  if (erroAbrir) {
+    console.error("Erro ao liberar próxima semana:", erroAbrir);
+    return false;
+  }
+
+  return true;
 }
 
 async function salvarRespostaTreinamentoBanco(
@@ -1104,6 +1676,9 @@ async function carregarProjetosBanco(
       dublador: item.dublador || "",
       telefone_dublador: item.telefone_dublador || "",
       funcao: item.funcao || "",
+      status_entrega: item.status_entrega || "pendente",
+      semana_atual: item.semana_atual || "Semana 01",
+      video_entrega: item.video_entrega || "",
     });
   });
 
@@ -1319,9 +1894,19 @@ function extrairLinksDrive(observacoes?: string) {
   if (inicio === -1 || fim === -1) {
     return {
       pasta: "",
+      selecao: "",
+      projeto: "",
       videos: "",
       cortes: "",
       finalizados: "",
+      falasTeste: "",
+      respostasSelecao: "",
+      cortesProjeto: "",
+      entregasProjeto: "",
+      formSelecao: "",
+      formEntregas: "",
+      planilhaSelecao: "",
+      planilhaEntregas: "",
     };
   }
 
@@ -1330,17 +1915,37 @@ function extrairLinksDrive(observacoes?: string) {
 
     return {
       pasta: "",
+      selecao: "",
+      projeto: "",
       videos: "",
       cortes: "",
       finalizados: "",
+      falasTeste: "",
+      respostasSelecao: "",
+      cortesProjeto: "",
+      entregasProjeto: "",
+      formSelecao: "",
+      formEntregas: "",
+      planilhaSelecao: "",
+      planilhaEntregas: "",
       ...JSON.parse(json),
     };
   } catch {
     return {
       pasta: "",
+      selecao: "",
+      projeto: "",
       videos: "",
       cortes: "",
       finalizados: "",
+      falasTeste: "",
+      respostasSelecao: "",
+      cortesProjeto: "",
+      entregasProjeto: "",
+      formSelecao: "",
+      formEntregas: "",
+      planilhaSelecao: "",
+      planilhaEntregas: "",
     };
   }
 }
@@ -1444,6 +2049,7 @@ export default function App() {
   const [registroSemanalTexto, setRegistroSemanalTexto] = useState("");
   const [abaProjeto, setAbaProjeto] = useState<
     | "informacoes"
+    | "selecao"
     | "elenco"
     | "registros"
     | "drive"
@@ -1473,6 +2079,32 @@ export default function App() {
     useState<ElencoItem>(elencoVazio);
   const [novoElencoRascunho, setNovoElencoRascunho] =
     useState<ElencoItem>(elencoVazio);
+  const [criandoEstruturaDrive, setCriandoEstruturaDrive] = useState(false);
+  const [respostasSelecao, setRespostasSelecao] = useState<RespostaSelecao[]>(
+    []
+  );
+  const [respostaSelecaoAtivaId, setRespostaSelecaoAtivaId] = useState<
+    string | null
+  >(null);
+  const [sincronizandoSelecao, setSincronizandoSelecao] = useState(false);
+  const [statusSelecaoPorId, setStatusSelecaoPorId] = useState<
+    Record<string, StatusSelecao>
+  >({});
+  const [comentarioSelecaoPorId, setComentarioSelecaoPorId] = useState<
+    Record<string, string>
+  >({});
+  const [avaliacoesSelecaoSalvas, setAvaliacoesSelecaoSalvas] = useState<
+    AvaliacaoSelecao[]
+  >([]);
+  const [salvandoAvaliacaoSelecao, setSalvandoAvaliacaoSelecao] =
+    useState(false);
+  const [entregasProducao, setEntregasProducao] = useState<EntregaProducao[]>(
+    []
+  );
+  const [sincronizandoEntregas, setSincronizandoEntregas] = useState(false);
+  const [semanasProjeto, setSemanasProjeto] = useState<ProjetoSemana[]>([]);
+  const [semanaFiltroProducao, setSemanaFiltroProducao] = useState(1);
+  const [liberandoSemana, setLiberandoSemana] = useState(false);
 
   useEffect(() => {
     function atualizarLargura() {
@@ -1483,6 +2115,956 @@ export default function App() {
     window.addEventListener("resize", atualizarLargura);
     return () => window.removeEventListener("resize", atualizarLargura);
   }, []);
+
+  async function carregarAvaliacoesSelecaoProjeto(projeto: Projeto) {
+    const avaliacoes = await carregarAvaliacoesSelecaoBanco(projeto.ID);
+    setAvaliacoesSelecaoSalvas(avaliacoes);
+
+    const statusMap: Record<string, StatusSelecao> = {};
+    const comentarioMap: Record<string, string> = {};
+
+    avaliacoes.forEach((item) => {
+      statusMap[item.resposta_id] = item.status;
+      comentarioMap[item.resposta_id] = item.comentario_lider || "";
+    });
+
+    setStatusSelecaoPorId((anterior) => ({
+      ...anterior,
+      ...statusMap,
+    }));
+
+    setComentarioSelecaoPorId((anterior) => ({
+      ...anterior,
+      ...comentarioMap,
+    }));
+  }
+
+  async function salvarAvaliacaoSelecaoAtual(
+    projeto: Projeto,
+    resposta: RespostaSelecao | null,
+    status: StatusSelecao,
+    comentario: string
+  ) {
+    if (!resposta) {
+      alert("Selecione uma resposta primeiro.");
+      return false;
+    }
+
+    if (!projeto?.ID) {
+      alert("Projeto inválido.");
+      return false;
+    }
+
+    setSalvandoAvaliacaoSelecao(true);
+
+    try {
+      const ok = await salvarAvaliacaoSelecaoBanco({
+        projeto_id: Number(projeto.ID),
+        resposta_id: resposta.id,
+        linha: resposta.linha ?? null,
+        nome: resposta.nome || "",
+        telefone: resposta.telefone || "",
+        personagem: resposta.personagem || "",
+        semana: resposta.semana || "Semana 01",
+        video_url: resposta.videoUrl || "",
+        comentario_membro: resposta.comentario || "",
+        status,
+        comentario_lider: comentario || "",
+        avaliado_por: usuarioLogado?.nome || usuarioLogado?.login || "Sistema",
+      });
+
+      if (!ok) {
+        alert("Não consegui salvar a avaliação no Supabase.");
+        return false;
+      }
+
+      setStatusSelecaoPorId((anterior) => ({
+        ...anterior,
+        [resposta.id]: status,
+      }));
+
+      setComentarioSelecaoPorId((anterior) => ({
+        ...anterior,
+        [resposta.id]: comentario || "",
+      }));
+
+      await carregarAvaliacoesSelecaoProjeto(projeto);
+
+      return true;
+    } finally {
+      setSalvandoAvaliacaoSelecao(false);
+    }
+  }
+
+  async function sincronizarRespostasSelecao(projeto: Projeto) {
+    const links = extrairLinksDrive(projeto.Observacoes);
+    const planilhaSelecao = links.planilhaSelecao || "";
+    const pastaRespostasSelecao = links.respostasSelecao || links.selecao || "";
+
+    if (!planilhaSelecao && !pastaRespostasSelecao) {
+      alert(
+        "Ainda não encontrei a planilha nem a pasta de respostas da seleção neste projeto. Crie a estrutura do Drive novamente em um projeto teste."
+      );
+      return;
+    }
+
+    try {
+      setSincronizandoSelecao(true);
+      const respostas = await lerRespostasSelecaoViaAppsScript(
+        planilhaSelecao,
+        pastaRespostasSelecao
+      );
+
+      setRespostasSelecao(respostas);
+      await carregarAvaliacoesSelecaoProjeto(projeto);
+
+      if (respostas.length) {
+        setRespostaSelecaoAtivaId(respostas[0].id);
+      } else {
+        setRespostaSelecaoAtivaId(null);
+      }
+
+      alert(
+        `Sincronização concluída. ${respostas.length} resposta(s) importada(s).`
+      );
+    } catch (err: any) {
+      console.error("Erro ao sincronizar respostas da seleção:", err);
+      alert(`Erro ao sincronizar respostas: ${err?.message || String(err)}`);
+    } finally {
+      setSincronizandoSelecao(false);
+    }
+  }
+
+  async function adicionarRespostaSelecaoAoElenco(
+    resposta?: RespostaSelecao | null
+  ) {
+    if (!projetoPainel || !resposta) {
+      alert("Selecione uma resposta primeiro.");
+      return;
+    }
+
+    if (!resposta.personagem || !resposta.nome) {
+      alert(
+        "A resposta precisa ter personagem e nome do membro para entrar no elenco."
+      );
+      return;
+    }
+
+    const jaTemPersonagem = projetoPainel.Elenco.some(
+      (item) => normalizar(item.personagem) === normalizar(resposta.personagem)
+    );
+
+    if (jaTemPersonagem) {
+      const confirmar = window.confirm(
+        `Já existe alguém registrado para ${resposta.personagem}. Deseja substituir pelo membro ${resposta.nome}?`
+      );
+
+      if (!confirmar) return;
+    }
+
+    const novoElenco = [
+      ...projetoPainel.Elenco.filter(
+        (item) =>
+          normalizar(item.personagem) !== normalizar(resposta.personagem)
+      ),
+      {
+        id: gerarIdTemporario(),
+        personagem: resposta.personagem,
+        dublador: resposta.nome,
+        telefone_dublador: resposta.telefone || "",
+        funcao: "Dublador",
+      },
+    ];
+
+    const ok = await salvarElencoProjetoBanco(projetoPainel.ID, novoElenco);
+
+    if (!ok) {
+      alert("Não consegui salvar o elenco no banco.");
+      return;
+    }
+
+    await salvarAvaliacaoSelecaoAtual(
+      projetoPainel,
+      resposta,
+      "aprovado",
+      comentarioSelecaoPorId[resposta.id] || ""
+    );
+
+    await recarregarProjetos();
+    alert(
+      `${resposta.nome} foi aprovado(a) e adicionado(a) ao elenco como ${resposta.personagem}.`
+    );
+  }
+
+  async function carregarSemanasProjeto(projeto: Projeto) {
+    let semanas = await carregarSemanasProjetoBanco(projeto.ID);
+
+    if (!semanas.length) {
+      await garantirSemanaProjetoBanco(
+        projeto.ID,
+        1,
+        usuarioLogado?.nome || usuarioLogado?.login || "Sistema"
+      );
+      semanas = await carregarSemanasProjetoBanco(projeto.ID);
+    }
+
+    setSemanasProjeto(semanas);
+
+    const semanaAberta =
+      semanas.find((item) => item.status === "aberta") ||
+      semanas[semanas.length - 1];
+
+    if (semanaAberta?.semana) {
+      setSemanaFiltroProducao(semanaAberta.semana);
+    }
+
+    return semanas;
+  }
+
+  async function carregarEntregasProducaoProjeto(projeto: Projeto) {
+    const entregas = await carregarEntregasProducaoBanco(projeto.ID);
+    setEntregasProducao(entregas);
+    await carregarSemanasProjeto(projeto);
+    return entregas;
+  }
+
+  function todosEntregaramSemana(
+    projeto: Projeto,
+    entregas: EntregaProducao[],
+    semana: number
+  ) {
+    const elenco = (projeto.Elenco || []).filter(
+      (item) => item.personagem && item.dublador
+    );
+
+    if (!elenco.length) return false;
+
+    return elenco.every((personagem) =>
+      entregas.some(
+        (entrega) =>
+          normalizar(entrega.personagem) ===
+            normalizar(personagem.personagem) &&
+          numeroSemanaEntrega(entrega.semana) === semana
+      )
+    );
+  }
+
+  async function verificarLiberacaoAutomaticaSemana(
+    projeto: Projeto,
+    entregas: EntregaProducao[]
+  ) {
+    const semanas = await carregarSemanasProjeto(projeto);
+    const aberta =
+      semanas.find((item) => item.status === "aberta") ||
+      semanas[semanas.length - 1];
+
+    const semanaAtual = aberta?.semana || 1;
+
+    if (!todosEntregaramSemana(projeto, entregas, semanaAtual)) {
+      return;
+    }
+
+    const confirmar = window.confirm(
+      `Todos os dubladores entregaram a ${labelSemana(
+        semanaAtual
+      )}. Deseja concluir esta semana e liberar a ${labelSemana(
+        semanaAtual + 1
+      )}?`
+    );
+
+    if (!confirmar) return;
+
+    setLiberandoSemana(true);
+
+    try {
+      const ok = await concluirSemanaProjetoBanco(
+        projeto.ID,
+        semanaAtual,
+        usuarioLogado?.nome || usuarioLogado?.login || "Sistema"
+      );
+
+      if (!ok) {
+        alert("Não consegui liberar a próxima semana.");
+        return;
+      }
+
+      await carregarSemanasProjeto(projeto);
+      setSemanaFiltroProducao(semanaAtual + 1);
+      alert(`${labelSemana(semanaAtual + 1)} liberada automaticamente.`);
+    } finally {
+      setLiberandoSemana(false);
+    }
+  }
+
+  async function sincronizarEntregasProducao(projeto: Projeto) {
+    const links = extrairLinksDrive(projeto.Observacoes);
+    const planilhaEntregas = links.planilhaEntregas || "";
+    const pastaEntregas = links.entregasProjeto || links.projeto || "";
+
+    if (!planilhaEntregas && !pastaEntregas) {
+      alert(
+        "Ainda não encontrei a planilha nem a pasta de entregas deste projeto."
+      );
+      return;
+    }
+
+    try {
+      setSincronizandoEntregas(true);
+
+      const respostas = await lerRespostasEntregasViaEdge(
+        planilhaEntregas,
+        pastaEntregas
+      );
+
+      const entregasComProjeto = respostas.map((item) => ({
+        ...item,
+        projeto_id: Number(projeto.ID),
+      }));
+
+      const ok = await salvarEntregasProducaoBanco(
+        projeto.ID,
+        entregasComProjeto
+      );
+
+      if (!ok) {
+        alert("Não consegui salvar as entregas no Supabase.");
+        return;
+      }
+
+      const entregasAtualizadas = await carregarEntregasProducaoProjeto(
+        projeto
+      );
+      await verificarLiberacaoAutomaticaSemana(projeto, entregasAtualizadas);
+
+      alert(
+        `Sincronização concluída. ${respostas.length} entrega(s) importada(s).`
+      );
+    } catch (err: any) {
+      console.error("Erro ao sincronizar entregas:", err);
+      alert(`Erro ao sincronizar entregas: ${err?.message || String(err)}`);
+    } finally {
+      setSincronizandoEntregas(false);
+    }
+  }
+
+  async function alterarStatusEntrega(
+    entrega: EntregaProducao,
+    status: "pendente" | "aprovado" | "regravacao"
+  ) {
+    if (!entrega.id) {
+      alert("Entrega ainda não foi salva no Supabase.");
+      return;
+    }
+
+    const ok = await atualizarStatusEntregaBanco(
+      entrega.id,
+      status,
+      usuarioLogado?.nome || usuarioLogado?.login || "Sistema"
+    );
+
+    if (!ok) {
+      alert("Não consegui atualizar o status da entrega.");
+      return;
+    }
+
+    setEntregasProducao((anteriores) =>
+      anteriores.map((item) =>
+        item.id === entrega.id ? { ...item, status } : item
+      )
+    );
+  }
+
+  function renderAbaSelecaoVisual(projeto: Projeto) {
+    const links = extrairLinksDrive(projeto.Observacoes);
+
+    const temFormulario = Boolean(links.formSelecao || links.respostasSelecao);
+    const respostaAtiva =
+      respostasSelecao.find((item) => item.id === respostaSelecaoAtivaId) ||
+      respostasSelecao[0] ||
+      null;
+
+    const statusAtual: StatusSelecao =
+      (respostaAtiva && statusSelecaoPorId[respostaAtiva.id]) ||
+      respostaAtiva?.status ||
+      "pendente";
+
+    const comentarioAtual =
+      (respostaAtiva && comentarioSelecaoPorId[respostaAtiva.id]) || "";
+
+    const respostasComStatus = respostasSelecao.map((item) => ({
+      ...item,
+      statusFinal: statusSelecaoPorId[item.id] || item.status || "pendente",
+    }));
+
+    const totalPendentes = respostasComStatus.filter(
+      (item) => item.statusFinal === "pendente"
+    ).length;
+    const totalAprovados = respostasComStatus.filter(
+      (item) => item.statusFinal === "aprovado"
+    ).length;
+    const totalReprovados = respostasComStatus.filter(
+      (item) => item.statusFinal === "reprovado"
+    ).length;
+
+    const previewUrl = respostaAtiva?.videoUrl
+      ? converterDriveParaPreview(respostaAtiva.videoUrl)
+      : "";
+
+    function atualizarStatus(status: StatusSelecao) {
+      if (!respostaAtiva) {
+        alert("Selecione uma resposta primeiro.");
+        return;
+      }
+
+      setStatusSelecaoPorId((anterior) => ({
+        ...anterior,
+        [respostaAtiva.id]: status,
+      }));
+    }
+
+    return (
+      <div style={{ display: "grid", gap: 18 }}>
+        <div style={painelDarkStyle}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <div>
+              <h2 style={tituloCardDarkStyle}>🎭 Seleção de Personagens</h2>
+              <p style={{ color: "#94a3b8", margin: "6px 0 0" }}>
+                Respostas do formulário de seleção. O líder analisa os testes,
+                aprova/reprova candidatos e adiciona aprovados ao elenco
+                oficial.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              style={botaoPrimarioStyle}
+              disabled={sincronizandoSelecao}
+              onClick={() => sincronizarRespostasSelecao(projeto)}
+            >
+              {sincronizandoSelecao
+                ? "Sincronizando..."
+                : "Sincronizar respostas"}
+            </button>
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile
+                ? "1fr"
+                : "repeat(4, minmax(0, 1fr))",
+              gap: 12,
+              marginTop: 18,
+            }}
+          >
+            {[
+              ["Pendentes", String(totalPendentes)],
+              ["Selecionados", String(totalAprovados)],
+              ["Não selecionados", String(totalReprovados)],
+              ["Formulário", temFormulario ? "Ativo" : "Pendente"],
+            ].map(([label, valor]) => (
+              <div
+                key={label}
+                style={{
+                  background: "rgba(2, 6, 23, 0.55)",
+                  border: "1px solid rgba(148, 163, 184, 0.24)",
+                  borderRadius: 14,
+                  padding: 14,
+                }}
+              >
+                <div style={{ color: "#94a3b8", fontSize: 12 }}>{label}</div>
+                <strong style={{ color: "#f8fafc", fontSize: 20 }}>
+                  {valor}
+                </strong>
+              </div>
+            ))}
+          </div>
+
+          {respostasSelecao.length > 0 && (
+            <div
+              style={{
+                marginTop: 18,
+                display: "grid",
+                gap: 10,
+              }}
+            >
+              <strong style={{ color: "#f8fafc" }}>Respostas importadas</strong>
+
+              <div
+                style={{
+                  display: "grid",
+                  gap: 8,
+                  maxHeight: 220,
+                  overflowY: "auto",
+                  paddingRight: 4,
+                }}
+              >
+                {respostasSelecao.map((item) => {
+                  const ativo = respostaAtiva?.id === item.id;
+                  const statusItem =
+                    statusSelecaoPorId[item.id] || item.status || "pendente";
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => setRespostaSelecaoAtivaId(item.id)}
+                      style={{
+                        textAlign: "left",
+                        border: ativo
+                          ? "1px solid rgba(56, 189, 248, 0.55)"
+                          : "1px solid rgba(148, 163, 184, 0.18)",
+                        background: ativo
+                          ? "rgba(56, 189, 248, 0.12)"
+                          : "rgba(2, 6, 23, 0.42)",
+                        borderRadius: 12,
+                        padding: 12,
+                        color: "#f8fafc",
+                        cursor: "pointer",
+                        display: "grid",
+                        gridTemplateColumns: isMobile
+                          ? "1fr"
+                          : "1.2fr 1.2fr 0.8fr 0.7fr",
+                        gap: 10,
+                        alignItems: "center",
+                      }}
+                    >
+                      <span>
+                        <strong>
+                          {item.personagem || "Personagem não informado"}
+                        </strong>
+                        <br />
+                        <small style={{ color: "#94a3b8" }}>
+                          {item.nome || "Nome não informado"}
+                        </small>
+                      </span>
+
+                      <span style={{ color: "#cbd5e1" }}>
+                        {item.telefone || "Sem número"}
+                      </span>
+
+                      <span style={{ color: "#cbd5e1" }}>
+                        {item.timestamp || "Sem data"}
+                      </span>
+
+                      <span
+                        style={{
+                          justifySelf: isMobile ? "start" : "end",
+                          borderRadius: 999,
+                          padding: "5px 10px",
+                          background:
+                            statusItem === "aprovado"
+                              ? "rgba(34, 197, 94, 0.16)"
+                              : statusItem === "reprovado"
+                              ? "rgba(248, 113, 113, 0.16)"
+                              : "rgba(245, 158, 11, 0.15)",
+                          color:
+                            statusItem === "aprovado"
+                              ? "#86efac"
+                              : statusItem === "reprovado"
+                              ? "#fecaca"
+                              : "#fbbf24",
+                          fontSize: 12,
+                          fontWeight: 800,
+                        }}
+                      >
+                        {statusItem === "aprovado"
+                          ? "Selecionado"
+                          : statusItem === "reprovado"
+                          ? "Não selecionado"
+                          : "Pendente"}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div
+          style={{
+            ...painelDarkStyle,
+            padding: 18,
+            border: "1px solid rgba(56, 189, 248, 0.20)",
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: isMobile
+                ? "1fr"
+                : "minmax(280px, 0.95fr) minmax(280px, 1fr) minmax(280px, 1fr)",
+              gap: 18,
+              alignItems: "stretch",
+            }}
+          >
+            <div>
+              <h2 style={{ ...tituloCardDarkStyle, marginBottom: 12 }}>
+                Pré-visualização do envio
+              </h2>
+
+              <div
+                style={{
+                  borderRadius: 16,
+                  overflow: "hidden",
+                  background: "rgba(2, 6, 23, 0.64)",
+                  border: "1px solid rgba(56, 189, 248, 0.16)",
+                  minHeight: 210,
+                  display: "grid",
+                  placeItems: "center",
+                  color: "#94a3b8",
+                }}
+              >
+                {previewUrl ? (
+                  <iframe
+                    title="Pré-visualização do envio"
+                    src={previewUrl}
+                    allow="autoplay"
+                    style={{
+                      width: "100%",
+                      height: 260,
+                      border: 0,
+                      background: "#020617",
+                    }}
+                  />
+                ) : (
+                  <div style={{ textAlign: "center", padding: 22 }}>
+                    <div
+                      style={{
+                        width: 54,
+                        height: 54,
+                        borderRadius: 16,
+                        margin: "0 auto 12px",
+                        display: "grid",
+                        placeItems: "center",
+                        background: "rgba(56, 189, 248, 0.12)",
+                        border: "1px solid rgba(56, 189, 248, 0.18)",
+                        color: "#38bdf8",
+                        fontSize: 26,
+                      }}
+                    >
+                      ▶
+                    </div>
+
+                    <strong style={{ color: "#f8fafc" }}>
+                      Nenhum envio selecionado
+                    </strong>
+
+                    <p
+                      style={{
+                        margin: "6px 0 0",
+                        fontSize: 13,
+                        color: "#94a3b8",
+                      }}
+                    >
+                      Sincronize e selecione uma resposta para assistir ao vídeo
+                      aqui.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <button
+                type="button"
+                style={{
+                  marginTop: 12,
+                  background: "transparent",
+                  border: "none",
+                  color: "#38bdf8",
+                  fontWeight: 700,
+                  cursor: respostaAtiva?.videoUrl ? "pointer" : "not-allowed",
+                  padding: 0,
+                  opacity: respostaAtiva?.videoUrl ? 1 : 0.5,
+                }}
+                disabled={!respostaAtiva?.videoUrl}
+                onClick={() => {
+                  if (respostaAtiva?.videoUrl) {
+                    window.open(respostaAtiva.videoUrl, "_blank");
+                  }
+                }}
+              >
+                Abrir em nova aba ↗
+              </button>
+            </div>
+
+            <div>
+              <h2 style={{ ...tituloCardDarkStyle, marginBottom: 12 }}>
+                Detalhes do envio
+              </h2>
+
+              <div
+                style={{
+                  display: "grid",
+                  gap: 10,
+                  color: "#cbd5e1",
+                  fontSize: 13,
+                }}
+              >
+                {[
+                  ["Membro", respostaAtiva?.nome || "Nenhum envio selecionado"],
+                  ["Número", respostaAtiva?.telefone || "—"],
+                  ["Personagem", respostaAtiva?.personagem || "—"],
+                  ["Data de envio", respostaAtiva?.timestamp || "—"],
+                  ["Tipo", "Seleção"],
+                ].map(([label, value]) => (
+                  <div
+                    key={label}
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "118px 1fr",
+                      gap: 10,
+                    }}
+                  >
+                    <span style={{ color: "#94a3b8" }}>{label}:</span>
+                    <strong style={{ color: "#f8fafc" }}>{value}</strong>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ marginTop: 16 }}>
+                <div
+                  style={{
+                    color: "#94a3b8",
+                    fontSize: 13,
+                    marginBottom: 8,
+                  }}
+                >
+                  Comentário do membro:
+                </div>
+
+                <div
+                  style={{
+                    minHeight: 74,
+                    borderRadius: 12,
+                    padding: 12,
+                    background: "rgba(2, 6, 23, 0.56)",
+                    border: "1px solid rgba(148, 163, 184, 0.16)",
+                    color: "#cbd5e1",
+                    fontSize: 13,
+                  }}
+                >
+                  {respostaAtiva?.comentario ||
+                    "O comentário enviado pelo membro aparecerá aqui."}
+                </div>
+              </div>
+
+              <button
+                type="button"
+                style={{
+                  marginTop: 16,
+                  border: "1px solid rgba(56, 189, 248, 0.28)",
+                  color: "#dbeafe",
+                  background: "rgba(56, 189, 248, 0.08)",
+                  borderRadius: 10,
+                  padding: "10px 14px",
+                  fontWeight: 700,
+                  cursor: respostaAtiva ? "pointer" : "not-allowed",
+                  opacity: respostaAtiva ? 1 : 0.5,
+                }}
+                disabled={!respostaAtiva}
+                onClick={() => adicionarRespostaSelecaoAoElenco(respostaAtiva)}
+              >
+                👥 Adicionar ao elenco manualmente
+              </button>
+            </div>
+
+            <div>
+              <h2 style={{ ...tituloCardDarkStyle, marginBottom: 12 }}>
+                Avaliação do líder
+              </h2>
+
+              <div
+                style={{
+                  color: "#94a3b8",
+                  fontSize: 13,
+                  marginBottom: 8,
+                }}
+              >
+                Status da seleção
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  gap: 10,
+                  flexWrap: "wrap",
+                  marginBottom: 14,
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={async () => {
+                    atualizarStatus("aprovado");
+                    if (projetoPainel && respostaAtiva) {
+                      const ok = await salvarAvaliacaoSelecaoAtual(
+                        projetoPainel,
+                        respostaAtiva,
+                        "aprovado",
+                        comentarioAtual
+                      );
+
+                      if (ok) {
+                        await adicionarRespostaSelecaoAoElenco(respostaAtiva);
+                      }
+                    }
+                  }}
+                  style={{
+                    border: "1px solid rgba(34, 197, 94, 0.35)",
+                    color: "#dcfce7",
+                    background:
+                      statusAtual === "aprovado"
+                        ? "rgba(22, 163, 74, 0.42)"
+                        : "rgba(22, 163, 74, 0.22)",
+                    borderRadius: 10,
+                    padding: "10px 14px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  ✓ Aprovar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    atualizarStatus("reprovado");
+                    if (projetoPainel && respostaAtiva) {
+                      await salvarAvaliacaoSelecaoAtual(
+                        projetoPainel,
+                        respostaAtiva,
+                        "reprovado",
+                        comentarioAtual
+                      );
+                    }
+                  }}
+                  style={{
+                    border: "1px solid rgba(248, 113, 113, 0.35)",
+                    color: "#fee2e2",
+                    background:
+                      statusAtual === "reprovado"
+                        ? "rgba(220, 38, 38, 0.42)"
+                        : "rgba(220, 38, 38, 0.20)",
+                    borderRadius: 10,
+                    padding: "10px 14px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  ✕ Reprovar
+                </button>
+
+                <button
+                  type="button"
+                  onClick={async () => {
+                    atualizarStatus("pendente");
+                    if (projetoPainel && respostaAtiva) {
+                      await salvarAvaliacaoSelecaoAtual(
+                        projetoPainel,
+                        respostaAtiva,
+                        "pendente",
+                        comentarioAtual
+                      );
+                    }
+                  }}
+                  style={{
+                    border: "1px solid rgba(245, 158, 11, 0.40)",
+                    color: "#fde68a",
+                    background:
+                      statusAtual === "pendente"
+                        ? "rgba(120, 53, 15, 0.48)"
+                        : "rgba(120, 53, 15, 0.28)",
+                    borderRadius: 10,
+                    padding: "10px 14px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  ◷ Pendente
+                </button>
+              </div>
+
+              <label
+                style={{
+                  display: "block",
+                  color: "#94a3b8",
+                  fontSize: 13,
+                  marginBottom: 8,
+                }}
+              >
+                Comentário do líder
+              </label>
+
+              <textarea
+                placeholder="Deixe uma observação sobre o teste..."
+                value={comentarioAtual}
+                onChange={(e) => {
+                  if (!respostaAtiva) return;
+                  setComentarioSelecaoPorId((anterior) => ({
+                    ...anterior,
+                    [respostaAtiva.id]: e.target.value,
+                  }));
+                }}
+                style={{
+                  width: "100%",
+                  minHeight: 112,
+                  resize: "vertical",
+                  boxSizing: "border-box",
+                  borderRadius: 12,
+                  padding: 12,
+                  background: "rgba(2, 6, 23, 0.64)",
+                  border: "1px solid rgba(148, 163, 184, 0.18)",
+                  color: "#f8fafc",
+                  outline: "none",
+                }}
+              />
+
+              <button
+                type="button"
+                style={{
+                  width: "100%",
+                  marginTop: 14,
+                  border: "1px solid rgba(56, 189, 248, 0.30)",
+                  color: "#06121f",
+                  background: "linear-gradient(135deg, #bfdbfe, #3b82f6)",
+                  borderRadius: 12,
+                  padding: "13px 16px",
+                  fontWeight: 900,
+                  cursor: respostaAtiva ? "pointer" : "not-allowed",
+                  opacity: respostaAtiva ? 1 : 0.5,
+                }}
+                disabled={!respostaAtiva || salvandoAvaliacaoSelecao}
+                onClick={async () => {
+                  if (!respostaAtiva || !projetoPainel) return;
+
+                  const ok = await salvarAvaliacaoSelecaoAtual(
+                    projetoPainel,
+                    respostaAtiva,
+                    statusAtual,
+                    comentarioAtual
+                  );
+
+                  if (ok) {
+                    alert("Avaliação salva no Supabase.");
+                  }
+                }}
+              >
+                {salvandoAvaliacaoSelecao ? "Salvando..." : "Salvar avaliação"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   async function recarregarProjetos() {
     try {
@@ -2051,6 +3633,114 @@ export default function App() {
     });
   }
 
+  async function criarEstruturaDriveProjeto() {
+    if (!rascunho || !projetoPainel) return;
+
+    if (!podeEditarProjeto(usuarioLogado, projetoPainel)) {
+      alert("Você não tem permissão para criar pastas neste projeto.");
+      return;
+    }
+
+    const linksAtuais = extrairLinksDrive(rascunho.Observacoes);
+
+    if (
+      linksAtuais.pasta ||
+      linksAtuais.selecao ||
+      linksAtuais.projeto ||
+      linksAtuais.finalizados
+    ) {
+      const confirmar = window.confirm(
+        "Este projeto já possui links do Drive cadastrados. Deseja continuar mesmo assim?"
+      );
+
+      if (!confirmar) return;
+    }
+
+    try {
+      setCriandoEstruturaDrive(true);
+
+      const resultado = await criarEstruturaDriveViaFunction(
+        `[Projeto] ${rascunho.Projeto || projetoPainel.Projeto || "Sem nome"}`,
+        rascunho.Lider || projetoPainel.Lider || "",
+        rascunho.Editor || projetoPainel.Editor || ""
+      );
+
+      if (
+        !resultado.pasta &&
+        !resultado.selecao &&
+        !resultado.projeto &&
+        !resultado.finalizados &&
+        !resultado.falasTeste &&
+        !resultado.respostasSelecao &&
+        !resultado.cortesProjeto &&
+        !resultado.entregasProjeto
+      ) {
+        console.error("Retorno inesperado da função do Drive:", resultado);
+        alert(
+          "A função respondeu, mas não retornou os links das pastas. Verifique os logs da Edge Function no Supabase."
+        );
+        return;
+      }
+
+      const novosLinks = {
+        ...linksAtuais,
+        pasta: resultado.pasta || linksAtuais.pasta || "",
+        selecao: resultado.selecao || linksAtuais.selecao || "",
+        projeto: resultado.projeto || linksAtuais.projeto || "",
+        finalizados: resultado.finalizados || linksAtuais.finalizados || "",
+        falasTeste: resultado.falasTeste || linksAtuais.falasTeste || "",
+        respostasSelecao:
+          resultado.respostasSelecao || linksAtuais.respostasSelecao || "",
+        cortesProjeto:
+          resultado.cortesProjeto || linksAtuais.cortesProjeto || "",
+        entregasProjeto:
+          resultado.entregasProjeto || linksAtuais.entregasProjeto || "",
+        formSelecao: resultado.formSelecao || linksAtuais.formSelecao || "",
+        formEntregas: resultado.formEntregas || linksAtuais.formEntregas || "",
+        planilhaSelecao:
+          resultado.planilhaSelecao || linksAtuais.planilhaSelecao || "",
+        planilhaEntregas:
+          resultado.planilhaEntregas || linksAtuais.planilhaEntregas || "",
+      };
+
+      const projetoComLinks: Projeto = {
+        ...rascunho,
+        Observacoes: salvarLinksDriveEmObservacoes(
+          rascunho.Observacoes,
+          novosLinks
+        ),
+      };
+
+      const projetoComHistorico = aplicarHistoricoAutomatico(
+        projetoPainel,
+        projetoComLinks,
+        "criou estrutura oficial no Google Drive"
+      );
+
+      const ok = await atualizarProjetoBanco(projetoComHistorico);
+
+      if (!ok) {
+        alert(
+          "A estrutura foi criada, mas houve erro ao salvar os links no banco."
+        );
+        return;
+      }
+
+      setRascunho(projetoComHistorico);
+      await recarregarProjetos();
+      alert("Estrutura do Drive criada e links salvos no projeto.");
+    } catch (err: any) {
+      console.error("Erro ao criar estrutura no Drive:", err);
+      alert(
+        `Erro ao criar estrutura no Drive: ${
+          err?.message || String(err) || "erro desconhecido"
+        }`
+      );
+    } finally {
+      setCriandoEstruturaDrive(false);
+    }
+  }
+
   async function salvarLinksDriveComHistorico() {
     if (!rascunho || !projetoPainel) return;
 
@@ -2063,12 +3753,18 @@ export default function App() {
       alterados.push("Pasta Principal");
     }
 
-    if ((linksAtuais.videos || "") !== (linksAntigos.videos || "")) {
-      alterados.push("Vídeos dos Personagens");
+    if (
+      (linksAtuais.selecao || linksAtuais.videos || "") !==
+      (linksAntigos.selecao || linksAntigos.videos || "")
+    ) {
+      alterados.push("1 | Seleção");
     }
 
-    if ((linksAtuais.cortes || "") !== (linksAntigos.cortes || "")) {
-      alterados.push("Cortes / Cenas");
+    if (
+      (linksAtuais.projeto || linksAtuais.cortes || "") !==
+      (linksAntigos.projeto || linksAntigos.cortes || "")
+    ) {
+      alterados.push("2 | Projeto");
     }
 
     if ((linksAtuais.finalizados || "") !== (linksAntigos.finalizados || "")) {
@@ -3084,7 +4780,7 @@ export default function App() {
   const driveSalvo = extrairLinksDrive(projetoDrive?.Observacoes);
 
   const driveLinks: {
-    chave: "pasta" | "videos" | "cortes" | "finalizados";
+    chave: "pasta" | "selecao" | "projeto" | "finalizados";
     titulo: string;
     descricao: string;
     icone: string;
@@ -3094,31 +4790,34 @@ export default function App() {
     {
       chave: "pasta",
       titulo: "Pasta Principal",
-      descricao: "Pasta principal do projeto com todos os materiais.",
+      descricao: "Pasta principal do projeto com toda a estrutura oficial.",
       icone: "📁",
       cor: "#2563eb",
       link: driveSalvo.pasta || "",
     },
     {
-      chave: "videos",
-      titulo: "Vídeos dos Personagens",
-      descricao: "Links de vídeos/testes separados por personagem.",
+      chave: "selecao",
+      titulo: "1 | Seleção",
+      descricao:
+        "Falas teste, formulário de seleção, testes enviados e resultado.",
       icone: "🎙️",
       cor: "#7c3aed",
-      link: driveSalvo.videos || "",
+      link: driveSalvo.selecao || driveSalvo.videos || "",
     },
     {
-      chave: "cortes",
-      titulo: "Cortes / Cenas",
-      descricao: "Cortes, cenas brutas e arquivos de edição.",
-      icone: "✂️",
+      chave: "projeto",
+      titulo: "2 | Projeto",
+      descricao:
+        "Cortes, cenas, áudios recebidos, edição e materiais em andamento.",
+      icone: "🧩",
       cor: "#16a34a",
-      link: driveSalvo.cortes || "",
+      link: driveSalvo.projeto || driveSalvo.cortes || "",
     },
     {
       chave: "finalizados",
-      titulo: "Finalizados",
-      descricao: "Episódios finalizados e prontos para postagem.",
+      titulo: "3 | Finalizado",
+      descricao:
+        "Vídeo final, créditos, thumbs, capas, renders e arquivos concluídos.",
       icone: "🎬",
       cor: "#f97316",
       link: driveSalvo.finalizados || "",
@@ -3539,10 +5238,6 @@ export default function App() {
                 ["Editor", "Editor"],
                 ["Data de início", "Data_Inicio"],
                 ["Capa do projeto (URL)", "Capa_URL"],
-                ["Drive — Pasta principal", "Drive_Pasta_Link"],
-                ["Drive — Vídeos dos personagens", "Drive_Videos_Link"],
-                ["Drive — Cortes / Cenas", "Drive_Cortes_Link"],
-                ["Drive — Finalizados", "Drive_Final_Link"],
               ].map(([label, campo]) => (
                 <div key={campo}>
                   <label style={labelStyle}>{label}</label>
@@ -3631,19 +5326,61 @@ export default function App() {
             <span>📁</span> Arquivos do Drive
           </h2>
           <p style={{ color: "#94a3b8", margin: "8px 0 0" }}>
-            Cole os links do Drive nos campos abaixo e clique em “Salvar
-            alterações”.
+            Crie a estrutura oficial no Google Drive ou cole os links
+            manualmente. Estrutura: 1 | Seleção, 2 | Projeto e 3 | Finalizado.
           </p>
         </div>
 
         {projetoPainel && podeEditarProjeto(usuarioLogado, projetoPainel) && (
-          <button
-            onClick={salvarLinksDriveComHistorico}
-            style={botaoPrimarioStyle}
+          <div
+            style={{
+              display: "flex",
+              gap: 10,
+              flexWrap: "wrap",
+              justifyContent: "flex-end",
+            }}
           >
-            Salvar links
-          </button>
+            <button
+              onClick={criarEstruturaDriveProjeto}
+              disabled={criandoEstruturaDrive}
+              style={{
+                ...botaoPrimarioStyle,
+                opacity: criandoEstruturaDrive ? 0.7 : 1,
+                cursor: criandoEstruturaDrive ? "not-allowed" : "pointer",
+              }}
+            >
+              {criandoEstruturaDrive
+                ? "Criando estrutura..."
+                : "Criar estrutura no Drive"}
+            </button>
+
+            <button
+              onClick={salvarLinksDriveComHistorico}
+              style={botaoSecundarioStyle}
+            >
+              Salvar links
+            </button>
+          </div>
         )}
+      </div>
+
+      <div
+        style={{
+          padding: 16,
+          borderRadius: 16,
+          border: "1px solid rgba(56,189,248,.25)",
+          background: "rgba(14,165,233,.08)",
+          color: "#cbd5e1",
+          marginBottom: 16,
+        }}
+      >
+        <strong style={{ color: "#f8fafc" }}>
+          Integração Google Drive — Beta
+        </strong>
+        <br />O botão cria a pasta principal do projeto e as subpastas oficiais:
+        <strong> 1 | Seleção</strong>, <strong>2 | Projeto</strong> e{" "}
+        <strong>3 | Finalizado</strong>. Se a função do Supabase ainda não
+        estiver configurada, o app apenas avisará sem quebrar o sistema.
       </div>
 
       <div style={{ display: "grid", gap: 16 }}>
@@ -3684,7 +5421,7 @@ export default function App() {
               </div>
 
               <input
-                placeholder="Cole o link do Drive aqui"
+                placeholder="Cole o link desta pasta aqui"
                 value={item.link || ""}
                 onChange={(e) => {
                   if (!rascunho) return;
@@ -4950,7 +6687,8 @@ export default function App() {
       <div style={tabsDarkStyle}>
         {[
           ["informacoes", "ⓘ Informações"],
-          ["elenco", "👥 Elenco"],
+          ["selecao", "🎭 Seleção"],
+          ["elenco", "🎬 Produção"],
           ["registros", "▣ Registros Semanais"],
           ["drive", "📁 Arquivos do Drive"],
           ["atividades", "↔ Atividades"],
@@ -5006,6 +6744,10 @@ export default function App() {
         </div>
       )}
 
+      {abaProjeto === "selecao" &&
+        projetoPainel &&
+        renderAbaSelecaoVisual(projetoPainel)}
+
       {abaProjeto === "elenco" && (
         <div style={painelDarkStyle}>
           <div
@@ -5019,12 +6761,12 @@ export default function App() {
           >
             <div>
               <h2 style={tituloCardDarkStyle}>
-                Elenco e vídeos por personagem
+                Produção e entregas por personagem
               </h2>
 
               <p style={{ color: "#94a3b8" }}>
-                Nesta área vamos guardar um link de vídeo/teste para cada
-                personagem.
+                Nesta área o elenco aprovado vira acompanhamento de produção e
+                entregas semanais.
               </p>
             </div>
 
@@ -5066,6 +6808,409 @@ export default function App() {
               </div>
             )}
           </div>
+
+          <div
+            style={{
+              display: "grid",
+              gap: 14,
+              marginTop: 18,
+            }}
+          >
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: isMobile
+                  ? "1fr"
+                  : "repeat(4, minmax(0, 1fr))",
+                gap: 12,
+              }}
+            >
+              {[
+                [
+                  "Personagens ativos",
+                  String(((rascunho || projetoPainel)?.Elenco || []).length),
+                ],
+                [
+                  "Entregas pendentes",
+                  String(
+                    ((rascunho || projetoPainel)?.Elenco || []).filter(
+                      (item) =>
+                        !item.status_entrega ||
+                        item.status_entrega === "pendente"
+                    ).length
+                  ),
+                ],
+                [
+                  "Entregas aprovadas",
+                  String(
+                    ((rascunho || projetoPainel)?.Elenco || []).filter(
+                      (item) => item.status_entrega === "aprovado"
+                    ).length
+                  ),
+                ],
+                [
+                  "Regravações",
+                  String(
+                    ((rascunho || projetoPainel)?.Elenco || []).filter(
+                      (item) => item.status_entrega === "regravacao"
+                    ).length
+                  ),
+                ],
+              ].map(([label, valor]) => (
+                <div
+                  key={label}
+                  style={{
+                    background: "rgba(2, 6, 23, 0.55)",
+                    border: "1px solid rgba(148, 163, 184, 0.20)",
+                    borderRadius: 14,
+                    padding: 14,
+                  }}
+                >
+                  <div style={{ color: "#94a3b8", fontSize: 12 }}>{label}</div>
+
+                  <strong
+                    style={{
+                      color: "#f8fafc",
+                      fontSize: 20,
+                    }}
+                  >
+                    {valor}
+                  </strong>
+                </div>
+              ))}
+            </div>
+
+            <div
+              style={{
+                background: "rgba(2, 6, 23, 0.42)",
+                border: "1px solid rgba(56, 189, 248, 0.16)",
+                borderRadius: 16,
+                padding: 16,
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <div>
+                <h2 style={{ ...tituloCardDarkStyle, margin: 0 }}>
+                  🎬 Painel de Produção
+                </h2>
+
+                <p
+                  style={{
+                    margin: "6px 0 0",
+                    color: "#94a3b8",
+                    fontSize: 13,
+                  }}
+                >
+                  Controle semanal das entregas dos dubladores aprovados.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                style={botaoPrimarioStyle}
+                disabled={sincronizandoEntregas || liberandoSemana}
+                onClick={() => {
+                  if (projetoPainel) {
+                    sincronizarEntregasProducao(projetoPainel);
+                  }
+                }}
+              >
+                {sincronizandoEntregas
+                  ? "Sincronizando..."
+                  : liberandoSemana
+                  ? "Liberando semana..."
+                  : "Sincronizar entregas"}
+              </button>
+            </div>
+          </div>
+
+          <div
+            style={{
+              marginTop: 16,
+              background: "rgba(2, 6, 23, 0.42)",
+              border: "1px solid rgba(56, 189, 248, 0.18)",
+              borderRadius: 16,
+              padding: 16,
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 12,
+                flexWrap: "wrap",
+                marginBottom: 14,
+              }}
+            >
+              <div>
+                <h2 style={{ ...tituloCardDarkStyle, margin: 0 }}>
+                  📦 Entregas oficiais
+                </h2>
+
+                <p
+                  style={{
+                    margin: "6px 0 0",
+                    color: "#94a3b8",
+                    fontSize: 13,
+                  }}
+                >
+                  Acompanhamento por semana do projeto oficial.
+                </p>
+              </div>
+
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                <select
+                  value={semanaFiltroProducao}
+                  onChange={(e) =>
+                    setSemanaFiltroProducao(Number(e.target.value))
+                  }
+                  style={inputStyle}
+                >
+                  {Array.from(
+                    new Set([
+                      1,
+                      ...semanasProjeto.map((item) => item.semana),
+                      ...entregasProducao.map((item) =>
+                        numeroSemanaEntrega(item.semana)
+                      ),
+                    ])
+                  )
+                    .sort((a, b) => a - b)
+                    .map((semana) => (
+                      <option key={semana} value={semana}>
+                        {labelSemana(semana)}
+                      </option>
+                    ))}
+                </select>
+
+                <span
+                  style={{
+                    borderRadius: 999,
+                    padding: "9px 12px",
+                    background: "rgba(56, 189, 248, 0.12)",
+                    color: "#7dd3fc",
+                    border: "1px solid rgba(56, 189, 248, 0.22)",
+                    fontSize: 12,
+                    fontWeight: 800,
+                    display: "inline-flex",
+                    alignItems: "center",
+                  }}
+                >
+                  {(() => {
+                    const semana = semanasProjeto.find(
+                      (item) => item.semana === semanaFiltroProducao
+                    );
+                    return semana?.status === "concluida"
+                      ? "Semana concluída"
+                      : "Semana aberta";
+                  })()}
+                </span>
+              </div>
+            </div>
+
+            {(() => {
+              const elenco = (rascunho || projetoPainel)?.Elenco || [];
+              const entregasSemana = entregasProducao.filter(
+                (entrega) =>
+                  numeroSemanaEntrega(entrega.semana) === semanaFiltroProducao
+              );
+              const totalElenco = elenco.length;
+              const totalEntregues = elenco.filter((item) =>
+                entregasSemana.some(
+                  (entrega) =>
+                    normalizar(entrega.personagem) ===
+                    normalizar(item.personagem)
+                )
+              ).length;
+              const totalPendentes = Math.max(totalElenco - totalEntregues, 0);
+              const progresso =
+                totalElenco > 0
+                  ? Math.round((totalEntregues / totalElenco) * 100)
+                  : 0;
+
+              return (
+                <div style={{ display: "grid", gap: 12 }}>
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: isMobile
+                        ? "1fr"
+                        : "repeat(4, minmax(0, 1fr))",
+                      gap: 12,
+                    }}
+                  >
+                    {[
+                      ["Elenco oficial", String(totalElenco)],
+                      ["Entregues", String(totalEntregues)],
+                      ["Pendentes", String(totalPendentes)],
+                      ["Progresso", `${progresso}%`],
+                    ].map(([label, valor]) => (
+                      <div
+                        key={label}
+                        style={{
+                          background: "rgba(15, 23, 42, 0.68)",
+                          border: "1px solid rgba(148, 163, 184, 0.16)",
+                          borderRadius: 14,
+                          padding: 14,
+                        }}
+                      >
+                        <div style={{ color: "#94a3b8", fontSize: 12 }}>
+                          {label}
+                        </div>
+                        <strong style={{ color: "#f8fafc", fontSize: 20 }}>
+                          {valor}
+                        </strong>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div
+                    style={{
+                      height: 10,
+                      borderRadius: 999,
+                      background: "rgba(15, 23, 42, 0.85)",
+                      overflow: "hidden",
+                      border: "1px solid rgba(148, 163, 184, 0.16)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        height: "100%",
+                        width: `${progresso}%`,
+                        background: "linear-gradient(135deg, #22c55e, #38bdf8)",
+                      }}
+                    />
+                  </div>
+
+                  <div style={{ display: "grid", gap: 10 }}>
+                    {elenco.map((item, index) => {
+                      const entrega = entregasSemana.find(
+                        (envio) =>
+                          normalizar(envio.personagem) ===
+                          normalizar(item.personagem)
+                      );
+
+                      return (
+                        <div
+                          key={item.id || index}
+                          style={{
+                            display: "grid",
+                            gridTemplateColumns: isMobile
+                              ? "1fr"
+                              : "1fr 1fr 0.9fr 1fr 1fr",
+                            gap: 12,
+                            alignItems: "center",
+                            background: "rgba(15, 23, 42, 0.70)",
+                            border: "1px solid rgba(148, 163, 184, 0.14)",
+                            borderRadius: 14,
+                            padding: 14,
+                          }}
+                        >
+                          <div>
+                            <div style={{ color: "#94a3b8", fontSize: 11 }}>
+                              Personagem
+                            </div>
+                            <strong style={{ color: "#f8fafc" }}>
+                              {item.personagem || "-"}
+                            </strong>
+                          </div>
+
+                          <div>
+                            <div style={{ color: "#94a3b8", fontSize: 11 }}>
+                              Dublador
+                            </div>
+                            <strong style={{ color: "#f8fafc" }}>
+                              {item.dublador || "-"}
+                            </strong>
+                          </div>
+
+                          <div>
+                            <span
+                              style={{
+                                borderRadius: 999,
+                                padding: "6px 10px",
+                                background: entrega
+                                  ? "rgba(34, 197, 94, 0.14)"
+                                  : "rgba(245, 158, 11, 0.14)",
+                                color: entrega ? "#86efac" : "#fde68a",
+                                border: "1px solid rgba(148, 163, 184, 0.14)",
+                                fontSize: 12,
+                                fontWeight: 800,
+                              }}
+                            >
+                              {entrega ? "Entregue" : "Pendente"}
+                            </span>
+                          </div>
+
+                          <div>
+                            {entrega?.video_url ? (
+                              <a
+                                href={entrega.video_url}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{
+                                  color: "#38bdf8",
+                                  fontWeight: 800,
+                                  textDecoration: "none",
+                                }}
+                              >
+                                Abrir envio ↗
+                              </a>
+                            ) : (
+                              <span style={{ color: "#94a3b8" }}>
+                                Sem envio
+                              </span>
+                            )}
+                          </div>
+
+                          <div
+                            style={{
+                              display: "flex",
+                              gap: 8,
+                              flexWrap: "wrap",
+                            }}
+                          >
+                            {entrega ? (
+                              <>
+                                <button
+                                  type="button"
+                                  style={botaoSecundarioStyle}
+                                  onClick={() =>
+                                    alterarStatusEntrega(entrega, "aprovado")
+                                  }
+                                >
+                                  Aprovar
+                                </button>
+                                <button
+                                  type="button"
+                                  style={botaoSecundarioStyle}
+                                  onClick={() =>
+                                    alterarStatusEntrega(entrega, "regravacao")
+                                  }
+                                >
+                                  Regravar
+                                </button>
+                              </>
+                            ) : (
+                              <span style={{ color: "#94a3b8", fontSize: 13 }}>
+                                Aguardando envio
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
+
           <div style={{ display: "grid", gap: 12, marginTop: 16 }}>
             {((rascunho || projetoPainel)?.Elenco || []).length ? (
               (rascunho || projetoPainel)!.Elenco.map((item, index) => (
@@ -5583,10 +7728,6 @@ export default function App() {
                 ["Status", "Status"],
                 ["Data de início", "Data_Inicio"],
                 ["Capa do projeto (URL)", "Capa_URL"],
-                ["Drive — Pasta principal", "Drive_Pasta_Link"],
-                ["Drive — Vídeos dos personagens", "Drive_Videos_Link"],
-                ["Drive — Cortes / Cenas", "Drive_Cortes_Link"],
-                ["Drive — Finalizados", "Drive_Final_Link"],
               ].map(([label, campo]) => (
                 <div key={campo}>
                   <label style={labelStyle}>{label}</label>
